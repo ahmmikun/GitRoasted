@@ -21,15 +21,15 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - In `lib/validators.ts` define `GITHUB_USERNAME_REGEX`, `usernameSchema`, `roastRequestSchema`, `roastOutputSchema`, and the `validateUsername` and `parseRoastOutput` helpers returning typed `{ ok }` results
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 8.1, 8.2, 8.3_
 
-  - [ ]* 2.2 Write property test for username validation
+  - [ ] 2.2 Write property test for username validation
     - **Property 1: Username validation matches the GitHub rule**
     - **Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5**
 
-  - [ ]* 2.3 Write property test for roast output schema range rejection
+  - [ ] 2.3 Write property test for roast output schema range rejection
     - **Property 11: Out-of-range scores are rejected**
     - **Validates: Requirements 8.2**
 
-  - [ ]* 2.4 Write unit tests for validator boundaries
+  - [ ] 2.4 Write unit tests for validator boundaries
     - Cover 39-char accept vs 40-char reject, `""`, `"   "`, leading/trailing hyphen, disallowed characters
     - _Requirements: 1.4, 1.5_
 
@@ -39,7 +39,7 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - Map profile 404 to `{ ok: false, kind: "not_found" }`, map 403/429/5xx/network failures to `{ ok: false, kind: "upstream_error" }`, return `{ ok: true, profile, repos }` (empty array allowed) on success
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-  - [ ]* 3.2 Write unit tests for the GitHub client
+  - [ ] 3.2 Write unit tests for the GitHub client
     - Mock fetch responses for success, profile 404, 403/5xx upstream errors, and an existing profile with an empty repos array; assert the correct typed result for each
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
@@ -49,15 +49,15 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - Compute the Developer_Score as a clamped, rounded integer in `[0, 100]` and build the compact `summary` string embedding the key stats
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-  - [ ]* 4.2 Write property test for analyzer aggregation consistency
+  - [ ] 4.2 Write property test for analyzer aggregation consistency
     - **Property 4: Analyzer aggregation is consistent**
     - **Validates: Requirements 6.1, 6.2**
 
-  - [ ]* 4.3 Write property test for bounded integer score
+  - [ ] 4.3 Write property test for bounded integer score
     - **Property 5: Developer score is a bounded integer**
     - **Validates: Requirements 6.3**
 
-  - [ ]* 4.4 Write property test for the summary string
+  - [ ] 4.4 Write property test for the summary string
     - **Property 6: Analyzer produces a usable summary**
     - **Validates: Requirements 6.4**
 
@@ -78,19 +78,19 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - Implement `generateRoast(summary, analyzerScore)` attempting providers in order OpenRouter → Gemini → OpenAI → Grok, validating each response with `parseRoastOutput`, skipping any throwing or invalid provider, falling back to `ruleBasedRoast` then `DEFAULT_ROAST`, and populating `aiMeta` (providerUsed, modelUsed, aiFailed, fallbackUsed)
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.3_
 
-  - [ ]* 6.4 Write unit tests for provider modules
+  - [ ] 6.4 Write unit tests for provider modules
     - For each provider, mock the HTTP response and assert `generate` maps it into the expected raw object
     - _Requirements: 7.1_
 
-  - [ ]* 6.5 Write property test for fallback chain order and validity
+  - [ ] 6.5 Write property test for fallback chain order and validity
     - **Property 8: AI fallback chain order and validity**
     - **Validates: Requirements 7.1, 7.2, 7.3, 8.1, 8.3**
 
-  - [ ]* 6.6 Write property test for guaranteed valid roast
+  - [ ] 6.6 Write property test for guaranteed valid roast
     - **Property 9: Generation always yields a valid roast**
     - **Validates: Requirements 7.4**
 
-  - [ ]* 6.7 Write property test for AI metadata correctness
+  - [ ] 6.7 Write property test for AI metadata correctness
     - **Property 10: AI metadata reflects the producing path**
     - **Validates: Requirements 7.5**
 
@@ -99,12 +99,12 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - Lowercase the username, strip characters outside `[a-z0-9-]`, append a hyphen and a 5-char random alphanumeric suffix
     - _Requirements: 9.1_
 
-  - [ ]* 7.2 Write property test for slug format
+  - [ ] 7.2 Write property test for slug format
     - **Property 12: Slug format**
     - **Validates: Requirements 9.1**
 
 - [ ] 8. Implement persistence layer
-  - [-] 8.1 Implement the Mongoose connection helper in `lib/db.ts`
+  - [ ] 8.1 Implement the Mongoose connection helper in `lib/db.ts`
     - Implement a cached connection using `MONGODB_URI` safe for serverless reuse
     - _Requirements: 9.2_
 
@@ -116,11 +116,11 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - Define the schema with unique `ip`, `requests`, `windowStart`, `lastRequestAt`
     - _Requirements: 3.1_
 
-  - [ ]* 8.4 Write property test for persistence round-trip and share URL
+  - [ ] 8.4 Write property test for persistence round-trip and share URL
     - **Property 13: Persistence round-trip and share URL**
     - **Validates: Requirements 9.2, 9.4**
 
-  - [ ]* 8.5 Write integration test for slug uniqueness at the DB level
+  - [ ] 8.5 Write integration test for slug uniqueness at the DB level
     - **Property 14: Slug uniqueness**
     - Assert the unique index rejects a duplicate slug insert
     - **Validates: Requirements 9.3**
@@ -130,7 +130,7 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - Add a function that queries the `Roast` collection for a record for the username created within `CACHE_DURATION_HOURS`, returning the record on hit or null on miss
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ]* 9.2 Write property test for the cache decision
+  - [ ] 9.2 Write property test for the cache decision
     - **Property 7: Cache decision depends only on record age**
     - **Validates: Requirements 4.2, 4.3**
 
@@ -138,11 +138,11 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - Read the IP's `RateLimit` doc; reset `requests` and `windowStart` when the window has elapsed, otherwise increment; return `allowed: false` with `retryAfterSeconds` when the limit would be exceeded; support an injectable clock for testing
     - _Requirements: 3.1, 3.2, 3.3, 3.5_
 
-  - [ ]* 9.4 Write property test for the per-IP rate-limit window
+  - [ ] 9.4 Write property test for the per-IP rate-limit window
     - **Property 2: Rate limiter enforces the per-IP window**
     - **Validates: Requirements 3.1, 3.2, 3.3, 3.5**
 
-  - [ ]* 9.5 Write property test for cached requests not consuming budget
+  - [ ] 9.5 Write property test for cached requests not consuming budget
     - **Property 3: Cached requests do not consume rate budget**
     - **Validates: Requirements 3.4**
 
@@ -159,7 +159,7 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - Return the `Roast_Record` for the slug, or 404 when none exists
     - _Requirements: 10.1, 10.2_
 
-  - [ ]* 11.3 Write integration tests for the roast API routes
+  - [ ] 11.3 Write integration tests for the roast API routes
     - With mocked GitHub/AI/persistence: cache hit (no rate count), cache miss success, rate-limit rejection, not-found, upstream error, and generation-failure (no share URL) paths; and the GET route hit/miss
     - _Requirements: 2.1, 3.2, 3.4, 4.2, 4.4, 5.3, 5.4, 10.1, 10.2_
 
@@ -180,11 +180,11 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - Copy `shareUrl` to the clipboard via the Clipboard API, show confirmation on success and an error message on failure
     - _Requirements: 11.1, 11.2, 11.3_
 
-  - [ ]* 12.5 Write property test for result rendering completeness
+  - [ ] 12.5 Write property test for result rendering completeness
     - **Property 15: Result rendering includes all record fields**
     - **Validates: Requirements 10.1**
 
-  - [ ]* 12.6 Write component tests for the UI flows
+  - [ ] 12.6 Write component tests for the UI flows
     - Cover valid/invalid submit, loading state, success navigation, error display (Req 2.1–2.4); not-found view and no-auth access (Req 10.2, 10.3); clipboard success/confirmation/failure (Req 11.1–11.3); home hero/CTA and fallback error state (Req 12.1–12.3)
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 10.2, 10.3, 11.1, 11.2, 11.3, 12.1, 12.2, 12.3_
 
