@@ -33,8 +33,8 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - Cover 39-char accept vs 40-char reject, `""`, `"   "`, leading/trailing hyphen, disallowed characters
     - _Requirements: 1.4, 1.5_
 
-- [ ] 3. Implement the GitHub client
-  - [ ] 3.1 Implement `fetchGitHubData` in `lib/github.ts`
+- [x] 3. Implement the GitHub client
+  - [x] 3.1 Implement `fetchGitHubData` in `lib/github.ts`
     - GET `/users/{username}` then GET `/users/{username}/repos?per_page=100&sort=updated`, using `GITHUB_TOKEN` when present
     - Map profile 404 to `{ ok: false, kind: "not_found" }`, map 403/429/5xx/network failures to `{ ok: false, kind: "upstream_error" }`, return `{ ok: true, profile, repos }` (empty array allowed) on success
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
@@ -43,8 +43,8 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - Mock fetch responses for success, profile 404, 403/5xx upstream errors, and an existing profile with an empty repos array; assert the correct typed result for each
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 4. Implement the profile analyzer
-  - [ ] 4.1 Implement `analyzeProfile` in `lib/analyzer.ts`
+- [x] 4. Implement the profile analyzer
+  - [x] 4.1 Implement `analyzeProfile` in `lib/analyzer.ts`
     - Compute `GitHubStats` (total stars/forks, top languages, description coverage counts, original vs forked counts, homepage and recent-activity counts), all zero-valued for an empty repo list
     - Compute the Developer_Score as a clamped, rounded integer in `[0, 100]` and build the compact `summary` string embedding the key stats
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
@@ -65,12 +65,12 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 6. Implement the AI fallback system
-  - [ ] 6.1 Implement the rule-based engine and default roast in `lib/ai/fallback.ts`
+  - [x] 6.1 Implement the rule-based engine and default roast in `lib/ai/fallback.ts`
     - Implement `ruleBasedRoast(profile, stats, score)` building roast lines from heuristics and deriving a grade from the score
     - Define `DEFAULT_ROAST` as a constant that always satisfies `roastOutputSchema`
     - _Requirements: 7.3, 7.4_
 
-  - [ ] 6.2 Implement the individual AI provider modules
+  - [x] 6.2 Implement the individual AI provider modules
     - Create `lib/ai/openrouter.ts`, `lib/ai/gemini.ts`, `lib/ai/openai.ts`, `lib/ai/grok.ts`, each implementing `AiProvider` with name, model, and a `generate(summary)` HTTP call returning the raw unvalidated response
     - _Requirements: 7.1_
 
@@ -94,8 +94,8 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - **Property 10: AI metadata reflects the producing path**
     - **Validates: Requirements 7.5**
 
-- [ ] 7. Implement the slug generator
-  - [ ] 7.1 Implement `generateSlug` in `lib/slug.ts`
+- [x] 7. Implement the slug generator
+  - [x] 7.1 Implement `generateSlug` in `lib/slug.ts`
     - Lowercase the username, strip characters outside `[a-z0-9-]`, append a hyphen and a 5-char random alphanumeric suffix
     - _Requirements: 9.1_
 
@@ -104,7 +104,7 @@ The project uses **Vitest** as the test runner and **fast-check** for property-b
     - **Validates: Requirements 9.1**
 
 - [ ] 8. Implement persistence layer
-  - [ ] 8.1 Implement the Mongoose connection helper in `lib/db.ts`
+  - [-] 8.1 Implement the Mongoose connection helper in `lib/db.ts`
     - Implement a cached connection using `MONGODB_URI` safe for serverless reuse
     - _Requirements: 9.2_
 
