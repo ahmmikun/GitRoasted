@@ -111,13 +111,11 @@ export async function fetchGitHubData(
     profileResponse = await fetch(`${GITHUB_API_BASE}/users/${encoded}`, {
       headers,
     });
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       kind: "upstream_error",
-      message: `Network error fetching GitHub profile: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      message: "Failed to reach the GitHub API.",
     };
   }
 
@@ -140,13 +138,11 @@ export async function fetchGitHubData(
   let rawProfile: RawGitHubUser;
   try {
     rawProfile = (await profileResponse.json()) as RawGitHubUser;
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       kind: "upstream_error",
-      message: `Failed to parse GitHub profile response: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      message: "Failed to read the GitHub API response.",
     };
   }
 
@@ -157,13 +153,11 @@ export async function fetchGitHubData(
       `${GITHUB_API_BASE}/users/${encoded}/repos?per_page=100&sort=updated`,
       { headers },
     );
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       kind: "upstream_error",
-      message: `Network error fetching GitHub repositories: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      message: "Failed to reach the GitHub API.",
     };
   }
 
@@ -179,13 +173,11 @@ export async function fetchGitHubData(
   try {
     const parsed = await reposResponse.json();
     rawRepos = Array.isArray(parsed) ? (parsed as RawGitHubRepo[]) : [];
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       kind: "upstream_error",
-      message: `Failed to parse GitHub repositories response: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      message: "Failed to read the GitHub API response.",
     };
   }
 

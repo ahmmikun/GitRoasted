@@ -17,7 +17,11 @@ export async function GET(
   const { slug } = await params;
 
   await connectToDatabase();
-  const record = await RoastModel.findOne({ slug }).lean();
+  // Project only public fields — aiMeta, _id, __v, and publicStats are
+  // internal and must not appear in the network tab.
+  const record = await RoastModel.findOne({ slug })
+    .select("slug username githubProfile githubStats analysis -_id")
+    .lean();
 
   if (!record) {
     return NextResponse.json(

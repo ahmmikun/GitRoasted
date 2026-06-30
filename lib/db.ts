@@ -21,6 +21,19 @@ interface MongooseCache {
   promise: Promise<Mongoose> | null;
 }
 
+let dnsConfigured = false;
+
+async function configureDns(): Promise<void> {
+  if (dnsConfigured) {
+    return;
+  }
+
+  const dns = await import("node:dns");
+  dns.setServers(["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4"]);
+  dns.setDefaultResultOrder("ipv4first");
+  dnsConfigured = true;
+}
+
 // Augment the global scope with a typed slot for the cache so repeated
 // imports (and hot reloads) reuse the same object rather than reconnecting.
 const globalForMongoose = globalThis as typeof globalThis & {
@@ -47,6 +60,8 @@ export async function connectToDatabase(): Promise<Mongoose> {
   }
 
   if (!cache.promise) {
+    await configureDns();
+
     const uri = process.env.MONGODB_URI;
     if (!uri) {
       throw new Error(
