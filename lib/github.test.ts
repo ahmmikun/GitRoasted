@@ -59,7 +59,11 @@ describe("fetchGitHubData", () => {
   it("returns ok:true with normalized profile and repos on success", async () => {
     mockFetch
       .mockResolvedValueOnce(jsonResponse(rawProfile))
-      .mockResolvedValueOnce(jsonResponse(rawRepos));
+      .mockResolvedValueOnce(jsonResponse(rawRepos))
+      // profile README (username/username) → 404 (no profile README)
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      // top repo README (my-repo) → 404
+      .mockResolvedValueOnce({ ok: false, status: 404 });
 
     const result = await fetchGitHubData("testuser");
     expect(result.ok).toBe(true);
@@ -141,7 +145,9 @@ describe("fetchGitHubData", () => {
   it("returns ok:true with an empty repos array when the user has no public repos", async () => {
     mockFetch
       .mockResolvedValueOnce(jsonResponse(rawProfile))
-      .mockResolvedValueOnce(jsonResponse([]));
+      .mockResolvedValueOnce(jsonResponse([]))
+      // profile README only (no top repos to fetch)
+      .mockResolvedValueOnce({ ok: false, status: 404 });
     const result = await fetchGitHubData("testuser");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -152,7 +158,9 @@ describe("fetchGitHubData", () => {
     const minimalProfile = { login: "min", html_url: "https://github.com/min" };
     mockFetch
       .mockResolvedValueOnce(jsonResponse(minimalProfile))
-      .mockResolvedValueOnce(jsonResponse([]));
+      .mockResolvedValueOnce(jsonResponse([]))
+      // profile README only
+      .mockResolvedValueOnce({ ok: false, status: 404 });
     const result = await fetchGitHubData("min");
     expect(result.ok).toBe(true);
     if (!result.ok) return;

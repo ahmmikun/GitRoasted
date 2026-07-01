@@ -59,15 +59,26 @@ export async function POST(request: NextRequest) {
   }
   const { username } = validation;
 
-  // 2. Cache lookup — a hit returns the existing share URL without AI or rate counting.
-  try {
-    const cached = await findCachedRoast(username);
-    if (cached) {
-      const shareUrl = `${getAppUrl()}/r/${cached.slug}`;
-      return NextResponse.json({ success: true, slug: cached.slug, shareUrl });
+  // `force: true` lets the client bypass cache and always generate a fresh roast.
+  const force = bodyObj?.force === true;
+
+  // 2. Cache lookup — on a hit without force, ask the client to choose.
+  //    checkAndRecord is intentionally skipped here (Property 3).
+  if (!force) {
+    try {
+      const cached = await findCachedRoast(username);
+      if (cached) {
+        const shareUrl = `${getAppUrl()}/r/${cached.slug}`;
+        return NextResponse.json({
+          success: true,
+          cached: true,
+          slug: cached.slug,
+          shareUrl,
+        });
+      }
+    } catch {
+      // Cache miss or DB error — proceed to generation.
     }
-  } catch {
-    // Cache miss or DB error — proceed to generation.
   }
 
   // 3. Rate limit (only on cache-miss paths).

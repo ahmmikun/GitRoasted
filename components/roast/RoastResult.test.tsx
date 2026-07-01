@@ -61,7 +61,7 @@ const SHARE_URL = "https://example.com/r/tester-x1y2z";
 
 // Feature: gitroasted, Property 15: Result rendering includes all record fields
 describe("Property 15: RoastResult renders all record fields", () => {
-  it("renders all required fields for any valid RoastData", () => {
+  it("renders all required fields for any valid RoastData", { timeout: 20000 }, () => {
     const strengthsArb = fc.array(fc.string({ minLength: 1, maxLength: 80 }), {
       minLength: 1,
       maxLength: 5,

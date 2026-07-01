@@ -85,6 +85,9 @@ vi.mock("@/models/Roast", () => ({
   RoastModel: {
     create: vi.fn().mockResolvedValue({ slug: "testuser-abc12" }),
     findOne: vi.fn(() => ({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue(null),
+      }),
       lean: vi.fn().mockResolvedValue(null),
     })),
   },
@@ -106,7 +109,7 @@ import { RoastModel } from "@/models/Roast";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function makePostReq(body: unknown) {
+function makePostReq(body: Record<string, unknown>) {
   return new Request("http://localhost/api/roast", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -177,15 +180,27 @@ describe("POST /api/roast", () => {
   });
 
   // Feature: gitroasted, Property 3: Cached requests do not consume rate budget
-  it("returns the cached slug/shareUrl and does NOT call checkAndRecord on a cache hit", async () => {
+  it("returns cached:true with slug and does NOT call checkAndRecord on a cache hit", async () => {
     vi.mocked(findCachedRoast).mockResolvedValueOnce(cachedRecord as never);
 
     const res = await POST(makePostReq({ username: "testuser" }));
     expect(res.status).toBe(200);
-    const data = await res.json() as { success: boolean; slug: string };
+    const data = await res.json() as { success: boolean; cached: boolean; slug: string };
     expect(data.success).toBe(true);
+    expect(data.cached).toBe(true);
     expect(data.slug).toBe("testuser-x9z12");
     expect(checkAndRecord).not.toHaveBeenCalled();
+  });
+
+  it("bypasses cache and generates when force:true is sent", async () => {
+    // findCachedRoast is never called when force=true; beforeEach mock (null) is unused.
+    const res = await POST(makePostReq({ username: "testuser", force: true }));
+    expect(res.status).toBe(200);
+    const data = await res.json() as { success: boolean; cached?: boolean; slug: string };
+    expect(data.success).toBe(true);
+    expect(data.cached).toBeUndefined();
+    expect(data.slug).toBe("testuser-abc12");
+    expect(checkAndRecord).toHaveBeenCalled();
   });
 
   it("returns 429 when the IP rate limit is exceeded (cache miss)", async () => {
@@ -253,7 +268,7 @@ describe("POST /api/roast", () => {
 describe("GET /api/roast/[slug]", () => {
   it("returns 404 when no record exists for the slug", async () => {
     vi.mocked(RoastModel.findOne).mockReturnValueOnce({
-      lean: vi.fn().mockResolvedValue(null),
+      select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(null) }),
     } as never);
 
     const { request, params } = makeGetReq("unknown-slug");
@@ -268,7 +283,7 @@ describe("GET /api/roast/[slug]", () => {
       analysis: { score: 75 },
     };
     vi.mocked(RoastModel.findOne).mockReturnValueOnce({
-      lean: vi.fn().mockResolvedValue(mockDoc),
+      select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(mockDoc) }),
     } as never);
 
     const { request, params } = makeGetReq("found-abc12");

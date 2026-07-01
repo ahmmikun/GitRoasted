@@ -43,6 +43,7 @@ const RoastSchema = new Schema<IRoastDocument>(
       company: String,
       location: String,
       createdAt: String,
+      profileReadme: String,
     },
 
     githubStats: {

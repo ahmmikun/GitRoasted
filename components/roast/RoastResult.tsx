@@ -1,5 +1,18 @@
+import {
+  Flame,
+  GitBranch,
+  CheckCircle2,
+  XCircle,
+  Lightbulb,
+  Share2,
+  Trophy,
+  ExternalLink,
+  ArrowRight,
+} from "lucide-react";
+import * as Separator from "@radix-ui/react-separator";
 import type { GitHubProfile, GitHubStats, RoastOutput } from "@/lib/types";
 import ShareButtons from "./ShareButtons";
+import StatsGrid from "./StatsGrid";
 
 export interface RoastData {
   slug: string;
@@ -14,274 +27,404 @@ interface RoastResultProps {
   shareUrl: string;
 }
 
-function gradeColor(grade: string): string {
-  if (["S", "A"].includes(grade)) return "#3fb950";
-  if (grade === "B") return "#58a6ff";
-  if (grade === "C") return "#d29922";
-  if (grade === "D") return "#db6d28";
-  return "#f85149";
+function gradeConfig(grade: string): { color: string; shadow: string; bg: string } {
+  switch (grade) {
+    case "S": return { color: "#ffe600", shadow: "4px 4px 0px #ffe600", bg: "rgba(255,230,0,0.08)" };
+    case "A": return { color: "#00ff6a", shadow: "4px 4px 0px #00ff6a", bg: "rgba(0,255,106,0.08)" };
+    case "B": return { color: "#00e5ff", shadow: "4px 4px 0px #00e5ff", bg: "rgba(0,229,255,0.08)" };
+    case "C": return { color: "#ff8800", shadow: "4px 4px 0px #ff8800", bg: "rgba(255,136,0,0.08)" };
+    case "D": return { color: "#ff5500", shadow: "4px 4px 0px #ff5500", bg: "rgba(255,85,0,0.08)" };
+    default:  return { color: "#ff2d2d", shadow: "4px 4px 0px #ff2d2d", bg: "rgba(255,45,45,0.08)" };
+  }
 }
 
-const s = {
-  page: {
-    maxWidth: "780px",
-    margin: "0 auto",
-    padding: "2rem 1.5rem",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: "2rem",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    gap: "1.5rem",
-    flexWrap: "wrap" as const,
-  },
-  avatar: {
-    width: "88px",
-    height: "88px",
-    borderRadius: "50%",
-    border: "2px solid #30363d",
-  },
-  headerInfo: { flex: 1 },
-  username: { fontSize: "1.5rem", fontWeight: 700, margin: 0 },
-  subline: { color: "#8b949e", fontSize: "0.9rem", marginTop: "0.25rem" },
-  scoreRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "1rem",
-    flexWrap: "wrap" as const,
-  },
-  scoreCircle: {
-    width: "72px",
-    height: "72px",
-    borderRadius: "50%",
-    background: "#161b22",
-    border: "3px solid #30363d",
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  scoreNum: { fontSize: "1.5rem", fontWeight: 700, lineHeight: 1 },
-  scoreLabel: { fontSize: "0.6rem", color: "#8b949e", marginTop: "2px" },
-  gradeBadge: {
-    fontSize: "1.5rem",
-    fontWeight: 800,
-    padding: "0.25rem 0.75rem",
-    background: "#161b22",
-    border: "2px solid #30363d",
-    borderRadius: "6px",
-  },
-  card: {
-    background: "#161b22",
-    border: "1px solid #30363d",
-    borderRadius: "8px",
-    padding: "1.25rem 1.5rem",
-  },
-  cardTitle: {
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    color: "#8b949e",
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.05em",
-    marginBottom: "0.75rem",
-  },
-  title: { fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" },
-  shortRoast: {
-    fontStyle: "italic" as const,
-    fontSize: "1.05rem",
-    color: "#f0883e",
-    marginBottom: "1rem",
-  },
-  longRoast: { color: "#c9d1d9", lineHeight: 1.7 },
-  statsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-    gap: "0.75rem",
-  },
-  stat: {
-    background: "#161b22",
-    border: "1px solid #30363d",
-    borderRadius: "6px",
-    padding: "0.75rem",
-    textAlign: "center" as const,
-  },
-  statNum: { fontSize: "1.4rem", fontWeight: 700 },
-  statLabel: { fontSize: "0.75rem", color: "#8b949e", marginTop: "2px" },
-  list: {
-    listStyle: "none",
-    padding: 0,
-    margin: 0,
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: "0.5rem",
-  },
-  listItem: { display: "flex", gap: "0.5rem", alignItems: "flex-start" },
-  bullet: { flexShrink: 0, fontSize: "0.8rem", marginTop: "3px" },
-};
+function SectionTitle({
+  icon,
+  label,
+  color = "var(--text)",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  color?: string;
+}) {
+  return (
+    <div className="brut-section-title" style={{ color }}>
+      {icon}
+      <span>{label}</span>
+      <div
+        style={{
+          flex: 1,
+          height: "2px",
+          background: color === "var(--text)" ? "var(--border)" : color,
+          marginLeft: "0.5rem",
+          opacity: 0.4,
+        }}
+      />
+    </div>
+  );
+}
 
-/**
- * RoastResult — presentational component that renders all fields of a roast record.
- *
- * Receives data as props so it can be rendered by server components (result page)
- * and tested independently with React Testing Library.
- *
- * Requirements: 10.1, 10.3
- */
 export default function RoastResult({ data, shareUrl }: RoastResultProps) {
-  const { githubProfile: profile, githubStats: stats, analysis: roast } = data;
-  const grade = roast.grade;
+  const { githubProfile: p, githubStats: stats, analysis: roast } = data;
+  const grade = gradeConfig(roast.grade);
 
   return (
-    <div style={s.page}>
+    <div
+      style={{
+        maxWidth: "760px",
+        margin: "0 auto",
+        padding: "2rem 1.25rem 4rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "1.25rem",
+      }}
+    >
+      {/* Top stripe */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0,
+          height: "6px",
+          background:
+            "repeating-linear-gradient(90deg, var(--yellow) 0px, var(--yellow) 40px, #000 40px, #000 80px)",
+          zIndex: 50,
+        }}
+      />
+
+      {/* Back link */}
+      <a
+        href="/"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.4rem",
+          fontSize: "0.78rem",
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "var(--muted)",
+          marginTop: "1rem",
+        }}
+      >
+        ← New roast
+      </a>
+
       {/* Profile header */}
-      <header style={s.header}>
-        {profile.avatarUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={profile.avatarUrl}
-            alt={`${profile.login}'s avatar`}
-            style={s.avatar}
-          />
+      <div
+        className="brut-card"
+        style={{
+          padding: "1.5rem",
+          display: "flex",
+          gap: "1.25rem",
+          alignItems: "flex-start",
+          flexWrap: "wrap" as const,
+        }}
+      >
+        {p.avatarUrl && (
+          <div style={{ flexShrink: 0 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={p.avatarUrl}
+              alt={`${p.login}'s avatar`}
+              width={80}
+              height={80}
+              style={{
+                display: "block",
+                border: "3px solid var(--border)",
+                boxShadow: "4px 4px 0px var(--yellow)",
+              }}
+            />
+          </div>
         )}
-        <div style={s.headerInfo}>
-          <h1 style={s.username}>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+            <GitBranch size={14} color="var(--muted)" strokeWidth={2.5} />
+            <span style={{ fontSize: "0.78rem", color: "var(--muted)", fontWeight: 600 }}>
+              github.com/{p.login}
+            </span>
             <a
-              href={profile.profileUrl}
+              href={p.profileUrl}
               target="_blank"
               rel="noreferrer noopener"
+              aria-label="View on GitHub"
+              style={{ color: "var(--muted)", display: "flex" }}
             >
-              @{profile.login}
+              <ExternalLink size={12} />
             </a>
+          </div>
+
+          <h1
+            style={{
+              fontSize: "clamp(1.5rem, 4vw, 2rem)",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              lineHeight: 1,
+              marginBottom: "0.3rem",
+            }}
+          >
+            @{p.login}
           </h1>
-          {profile.name && (
-            <p style={s.subline}>{profile.name}</p>
+
+          {p.name && (
+            <p style={{ fontSize: "0.9rem", color: "var(--muted)", fontWeight: 500, marginBottom: "0.25rem" }}>
+              {p.name}
+            </p>
           )}
-          <div style={{ ...s.scoreRow, marginTop: "0.75rem" }}>
-            <div style={s.scoreCircle}>
-              <span style={s.scoreNum}>{roast.score}</span>
-              <span style={s.scoreLabel}>/ 100</span>
+          {p.bio && (
+            <p style={{ fontSize: "0.85rem", color: "var(--muted)", fontStyle: "italic" }}>
+              &ldquo;{p.bio}&rdquo;
+            </p>
+          )}
+        </div>
+
+        {/* Score + grade */}
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexShrink: 0 }}>
+          <div
+            style={{
+              background: "var(--surface-2)",
+              border: "3px solid var(--border)",
+              boxShadow: grade.shadow,
+              padding: "0.75rem 1rem",
+              textAlign: "center",
+              minWidth: "72px",
+            }}
+          >
+            <div style={{ fontSize: "2.25rem", fontWeight: 700, lineHeight: 1, color: grade.color }}>
+              {roast.score}
             </div>
-            <span
+            <div
               style={{
-                ...s.gradeBadge,
-                color: gradeColor(grade),
-                borderColor: gradeColor(grade),
+                fontSize: "0.6rem",
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "var(--muted)",
+                marginTop: "2px",
               }}
-              aria-label={`Grade ${grade}`}
             >
-              {grade}
-            </span>
+              / 100
+            </div>
+          </div>
+
+          <div
+            aria-label={`Grade ${roast.grade}`}
+            style={{
+              background: grade.bg,
+              border: `3px solid ${grade.color}`,
+              boxShadow: grade.shadow,
+              padding: "0.5rem 0.75rem",
+              fontSize: "2rem",
+              fontWeight: 700,
+              color: grade.color,
+              lineHeight: 1,
+            }}
+          >
+            {roast.grade}
           </div>
         </div>
-      </header>
+      </div>
 
-      {/* Roast content */}
-      <section style={s.card} aria-label="Roast">
-        <p style={s.cardTitle}>Roast</p>
-        <h2 style={s.title}>{roast.title}</h2>
-        <p style={s.shortRoast}>{roast.shortRoast}</p>
-        <p style={s.longRoast}>{roast.longRoast}</p>
-      </section>
+      {/* Roast card */}
+      <div className="brut-card-red" style={{ padding: "1.5rem" }}>
+        <SectionTitle
+          icon={<Flame size={14} strokeWidth={2.5} />}
+          label="Roast"
+          color="var(--red)"
+        />
 
-      {/* GitHub stats grid */}
-      <section aria-label="GitHub stats">
-        <p style={{ ...s.cardTitle, marginBottom: "0.75rem" }}>GitHub stats</p>
-        <div style={s.statsGrid}>
-          <div style={s.stat}>
-            <div style={s.statNum}>{stats.totalStars}</div>
-            <div style={s.statLabel}>Stars</div>
+        <h2
+          style={{
+            fontSize: "clamp(1.2rem, 3vw, 1.6rem)",
+            fontWeight: 700,
+            letterSpacing: "-0.01em",
+            marginBottom: "0.6rem",
+            lineHeight: 1.15,
+          }}
+        >
+          {roast.title}
+        </h2>
+
+        <p
+          style={{
+            fontStyle: "italic",
+            fontSize: "1.05rem",
+            color: "var(--orange)",
+            fontWeight: 600,
+            marginBottom: "1rem",
+            lineHeight: 1.5,
+          }}
+        >
+          {roast.shortRoast}
+        </p>
+
+        <Separator.Root
+          className="brut-divider"
+          style={{ marginBottom: "1rem", background: "rgba(255,45,45,0.3)" }}
+        />
+
+        <p style={{ color: "#c9d1d9", lineHeight: 1.75, fontSize: "0.95rem" }}>
+          {roast.longRoast}
+        </p>
+      </div>
+
+      {/* Stats */}
+      <div>
+        <SectionTitle
+          icon={<Trophy size={14} strokeWidth={2.5} />}
+          label="GitHub Stats"
+        />
+        <StatsGrid stats={stats} />
+      </div>
+
+      {/* Strengths + Weaknesses */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1.25rem" }}>
+        {roast.strengths.length > 0 && (
+          <div
+            style={{
+              border: "3px solid var(--green)",
+              boxShadow: "4px 4px 0px var(--green)",
+              background: "var(--surface)",
+              padding: "1.25rem",
+            }}
+          >
+            <SectionTitle
+              icon={<CheckCircle2 size={14} strokeWidth={2.5} />}
+              label="Strengths"
+              color="var(--green)"
+            />
+            <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+              {roast.strengths.map((s, i) => (
+                <li key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", fontSize: "0.9rem", lineHeight: 1.5 }}>
+                  <CheckCircle2 size={14} color="var(--green)" strokeWidth={2.5} style={{ flexShrink: 0, marginTop: "3px" }} />
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-          <div style={s.stat}>
-            <div style={s.statNum}>{stats.totalForks}</div>
-            <div style={s.statLabel}>Forks</div>
-          </div>
-          <div style={s.stat}>
-            <div style={s.statNum}>{stats.totalReposAnalyzed}</div>
-            <div style={s.statLabel}>Repos</div>
-          </div>
-          <div style={s.stat}>
-            <div style={s.statNum}>{stats.originalRepos}</div>
-            <div style={s.statLabel}>Original</div>
-          </div>
-          <div style={s.stat}>
-            <div style={s.statNum}>{stats.forkedRepos}</div>
-            <div style={s.statLabel}>Forked</div>
-          </div>
-          <div style={s.stat}>
-            <div style={s.statNum}>{stats.reposWithDescription}</div>
-            <div style={s.statLabel}>Described</div>
-          </div>
-          <div style={s.stat}>
-            <div style={s.statNum}>{stats.recentlyUpdatedRepos}</div>
-            <div style={s.statLabel}>Active (90d)</div>
-          </div>
-          <div style={s.stat}>
-            <div style={s.statNum}>{stats.topLanguages.length}</div>
-            <div style={s.statLabel}>Languages</div>
-          </div>
-        </div>
-        {stats.topLanguages.length > 0 && (
-          <p style={{ marginTop: "0.75rem", fontSize: "0.85rem", color: "#8b949e" }}>
-            Top languages: {stats.topLanguages.join(", ")}
-          </p>
         )}
-      </section>
 
-      {/* Strengths */}
-      {roast.strengths.length > 0 && (
-        <section style={s.card} aria-label="Strengths">
-          <p style={s.cardTitle}>Strengths</p>
-          <ul style={s.list}>
-            {roast.strengths.map((s, i) => (
-              <li key={i} style={{ display: "flex", gap: "0.5rem" }}>
-                <span>✅</span>
-                <span>{s}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+        {roast.weaknesses.length > 0 && (
+          <div
+            style={{
+              border: "3px solid var(--orange)",
+              boxShadow: "4px 4px 0px var(--orange)",
+              background: "var(--surface)",
+              padding: "1.25rem",
+            }}
+          >
+            <SectionTitle
+              icon={<XCircle size={14} strokeWidth={2.5} />}
+              label="Weaknesses"
+              color="var(--orange)"
+            />
+            <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+              {roast.weaknesses.map((w, i) => (
+                <li key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", fontSize: "0.9rem", lineHeight: 1.5 }}>
+                  <XCircle size={14} color="var(--orange)" strokeWidth={2.5} style={{ flexShrink: 0, marginTop: "3px" }} />
+                  <span>{w}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
-      {/* Weaknesses */}
-      {roast.weaknesses.length > 0 && (
-        <section style={s.card} aria-label="Weaknesses">
-          <p style={s.cardTitle}>Weaknesses</p>
-          <ul style={s.list}>
-            {roast.weaknesses.map((w, i) => (
-              <li key={i} style={{ display: "flex", gap: "0.5rem" }}>
-                <span>⚠️</span>
-                <span>{w}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Improvement tips */}
+      {/* Tips */}
       {roast.improvementTips.length > 0 && (
-        <section style={s.card} aria-label="Improvement tips">
-          <p style={s.cardTitle}>Improvement tips</p>
-          <ul style={s.list}>
+        <div
+          className="brut-card"
+          style={{ padding: "1.25rem", borderColor: "var(--yellow)", boxShadow: "var(--shadow)" }}
+        >
+          <SectionTitle
+            icon={<Lightbulb size={14} strokeWidth={2.5} />}
+            label="How to be less terrible"
+            color="var(--yellow)"
+          />
+          <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.65rem" }}>
             {roast.improvementTips.map((tip, i) => (
-              <li key={i} style={{ display: "flex", gap: "0.5rem" }}>
-                <span>💡</span>
+              <li key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", fontSize: "0.9rem", lineHeight: 1.5 }}>
+                <Lightbulb size={14} color="var(--yellow)" strokeWidth={2.5} style={{ flexShrink: 0, marginTop: "3px" }} />
                 <span>{tip}</span>
               </li>
             ))}
           </ul>
-        </section>
+        </div>
       )}
 
-      {/* Share section */}
-      <section style={{ ...s.card, textAlign: "center" }} aria-label="Share">
-        <p style={s.cardTitle}>Share your roast</p>
-        <p style={{ marginBottom: "1rem", fontStyle: "italic", color: "#c9d1d9" }}>
+      {/* Share */}
+      <div className="brut-card" style={{ padding: "1.5rem", textAlign: "center" }}>
+        <SectionTitle
+          icon={<Share2 size={14} strokeWidth={2.5} />}
+          label="Share your shame"
+        />
+        <p
+          style={{
+            fontStyle: "italic",
+            color: "var(--muted)",
+            fontSize: "0.95rem",
+            marginBottom: "1.25rem",
+            lineHeight: 1.5,
+          }}
+        >
           {roast.shareCaption}
         </p>
         <ShareButtons shareUrl={shareUrl} />
-      </section>
+      </div>
+
+      {/* CTA */}
+      <div
+        style={{
+          background: "var(--yellow)",
+          border: "3px solid var(--border)",
+          boxShadow: "6px 6px 0px var(--border)",
+          padding: "2rem 1.5rem",
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "1rem",
+        }}
+      >
+        <p
+          style={{
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "#000",
+            opacity: 0.6,
+          }}
+        >
+          Think you can do better?
+        </p>
+        <h2
+          style={{
+            fontSize: "clamp(1.4rem, 4vw, 2rem)",
+            fontWeight: 700,
+            color: "#000",
+            letterSpacing: "-0.02em",
+            lineHeight: 1.1,
+          }}
+        >
+          Roast your own profile.
+        </h2>
+        <a
+          href="/"
+          className="brut-btn"
+          style={{
+            background: "#000",
+            color: "var(--yellow)",
+            borderColor: "#000",
+            boxShadow: "4px 4px 0px rgba(0,0,0,0.3)",
+            marginTop: "0.25rem",
+          }}
+        >
+          Try it now
+          <ArrowRight size={16} strokeWidth={2.5} />
+        </a>
+      </div>
     </div>
   );
 }

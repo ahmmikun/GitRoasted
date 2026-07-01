@@ -1,48 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { Copy, Check, AlertCircle } from "lucide-react";
 
 interface ShareButtonsProps {
   shareUrl: string;
 }
 
-const styles = {
-  wrapper: {
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center",
-    gap: "0.75rem",
-  },
-  caption: {
-    fontSize: "0.9rem",
-    color: "#8b949e",
-    fontStyle: "italic" as const,
-    textAlign: "center" as const,
-  },
-  button: {
-    padding: "0.6rem 1.25rem",
-    fontSize: "0.95rem",
-    fontWeight: 600,
-    background: "#21262d",
-    border: "1px solid #30363d",
-    borderRadius: "6px",
-    color: "#e6edf3",
-    cursor: "pointer",
-  },
-  feedback: {
-    fontSize: "0.85rem",
-    fontWeight: 600,
-  },
-};
-
-/**
- * ShareButtons — client component for copying the share URL to the clipboard.
- *
- * Uses the Clipboard API to write the URL. Shows confirmation on success and
- * an error message when the clipboard operation fails.
- *
- * Requirements: 11.1, 11.2, 11.3
- */
 export default function ShareButtons({ shareUrl }: ShareButtonsProps) {
   const [feedback, setFeedback] = useState<{
     message: string;
@@ -52,33 +16,64 @@ export default function ShareButtons({ shareUrl }: ShareButtonsProps) {
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(shareUrl);
-      setFeedback({ message: "Link copied to clipboard! ✓", isError: false });
+      setFeedback({ message: "Link copied to clipboard!", isError: false });
+      setTimeout(() => setFeedback(null), 3000);
     } catch {
       setFeedback({
-        message: "Could not copy link. Please copy it manually.",
+        message: "Could not copy — select the URL manually.",
         isError: true,
       });
     }
   }
 
+  const copied = feedback && !feedback.isError;
+
   return (
-    <div style={styles.wrapper}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.875rem" }}>
       <button
         onClick={handleCopy}
-        style={styles.button}
         aria-label="Copy share link"
+        className="brut-btn"
+        style={copied ? { background: "var(--green)", borderColor: "var(--green)" } : undefined}
       >
-        🔗 Copy share link
+        {copied ? (
+          <Check size={16} strokeWidth={2.5} />
+        ) : (
+          <Copy size={16} strokeWidth={2.5} />
+        )}
+        {copied ? "Copied!" : "Copy share link"}
       </button>
+
+      {/* URL pill */}
+      <div
+        style={{
+          padding: "0.4rem 0.75rem",
+          background: "var(--surface-2)",
+          border: "2px solid var(--border)",
+          fontFamily: "monospace",
+          fontSize: "0.78rem",
+          color: "var(--muted)",
+          wordBreak: "break-all",
+          maxWidth: "340px",
+          textAlign: "center",
+        }}
+      >
+        {shareUrl}
+      </div>
 
       {feedback && (
         <p
           role={feedback.isError ? "alert" : "status"}
           style={{
-            ...styles.feedback,
-            color: feedback.isError ? "#f85149" : "#3fb950",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            color: feedback.isError ? "var(--red)" : "var(--green)",
+            fontSize: "0.85rem",
+            fontWeight: 600,
           }}
         >
+          {feedback.isError && <AlertCircle size={14} strokeWidth={2.5} />}
           {feedback.message}
         </p>
       )}

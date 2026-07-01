@@ -84,7 +84,9 @@ describe("UsernameForm", () => {
     await userEvent.type(screen.getByLabelText(/github username/i), "testuser");
     await userEvent.click(screen.getByRole("button", { name: /roast me/i }));
 
-    expect(screen.getByRole("button")).toHaveTextContent(/roasting/i);
+    // Loading screen replaces the form; verify the form submit button is gone
+    // and a loading indicator is shown instead.
+    expect(screen.queryByRole("button", { name: /roast me/i })).toBeNull();
 
     // Clean up
     resolve({

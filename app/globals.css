@@ -1,9 +1,27 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
 :root {
-  --background: #0d1117;
-  --foreground: #e6edf3;
+  --bg: #0a0a0a;
+  --surface: #111111;
+  --surface-2: #1a1a1a;
+  --border: #ffffff;
+  --yellow: #ffe600;
+  --red: #ff2d2d;
+  --green: #00ff6a;
+  --cyan: #00e5ff;
+  --orange: #ff8800;
+  --text: #ffffff;
+  --muted: #888888;
+  --shadow: 4px 4px 0px var(--yellow);
+  --shadow-sm: 2px 2px 0px var(--yellow);
+  --shadow-red: 4px 4px 0px var(--red);
+  --shadow-white: 4px 4px 0px #ffffff;
+  --border-width: 3px;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   padding: 0;
   margin: 0;
@@ -13,17 +31,170 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  background: var(--background);
-  color: var(--foreground);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* ── Brutalist utility classes ────────────────────────────────────────────── */
+
+.brut-card {
+  background: var(--surface);
+  border: var(--border-width) solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.brut-card-red {
+  background: var(--surface);
+  border: var(--border-width) solid var(--red);
+  box-shadow: var(--shadow-red);
+}
+
+.brut-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+  color: #000;
+  background: var(--yellow);
+  border: var(--border-width) solid var(--border);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.brut-btn:hover:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.brut-btn:active:not(:disabled) {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
+.brut-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.brut-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  color: var(--text);
+  background: var(--surface);
+  border: var(--border-width) solid var(--border);
+  box-shadow: var(--shadow-white);
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  user-select: none;
+}
+
+.brut-btn-ghost:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px #ffffff;
+}
+
+.brut-btn-ghost:active {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
+.brut-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface-2);
+  border: var(--border-width) solid var(--border);
+  box-shadow: none;
+  outline: none;
+  transition: box-shadow 0.1s ease, border-color 0.1s ease;
+  caret-color: var(--yellow);
+}
+
+.brut-input::placeholder {
+  color: var(--muted);
+}
+
+.brut-input:focus {
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 0 transparent, 4px 4px 0px var(--yellow);
+}
+
+.brut-label {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+}
+
+.brut-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+
+.brut-divider {
+  height: var(--border-width);
+  background: var(--border);
+  border: none;
+  margin: 0;
+}
+
+/* ── Radix Tooltip ─────────────────────────────────────────────────────────── */
+
+.TooltipContent {
+  background: var(--yellow);
+  color: #000;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.6rem;
+  border: 2px solid #000;
+  box-shadow: 2px 2px 0px #000;
+  z-index: 100;
+}
+
+/* ── Accent blink animation for the hero ──────────────────────────────────── */
+@keyframes blink-border {
+  0%, 100% { border-color: var(--yellow); }
+  50%       { border-color: var(--red); }
+}
+
+.hero-title-accent {
+  display: inline-block;
+  color: var(--yellow);
+  border-bottom: 4px solid var(--yellow);
+  line-height: 1;
 }

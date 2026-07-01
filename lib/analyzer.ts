@@ -139,12 +139,13 @@ function buildSummary(
   profile: GitHubProfile,
   stats: GitHubStats,
   score: number,
+  repos: GitHubRepo[],
 ): string {
   const name = isNonEmpty(profile.name) ? (profile.name as string) : profile.login;
   const languages = stats.topLanguages.length > 0 ? stats.topLanguages.join(", ") : "none";
   const bio = isNonEmpty(profile.bio) ? (profile.bio as string).trim() : "(no bio)";
 
-  return [
+  const lines = [
     `GitHub user: ${profile.login}${name !== profile.login ? ` (${name})` : ""}`,
     `Bio: ${bio}`,
     `Followers: ${profile.followers} | Following: ${profile.following} | Public repos: ${profile.publicRepos}`,
@@ -154,7 +155,32 @@ function buildSummary(
     `Descriptions: ${stats.reposWithDescription} with / ${stats.reposWithoutDescription} without`,
     `Repos with homepage: ${stats.reposWithHomepage} | Recently updated: ${stats.recentlyUpdatedRepos}`,
     `Developer score: ${score}/100`,
-  ].join("\n");
+  ];
+
+  // Top 5 non-forked repos by stars with README excerpts.
+  const topRepos = [...repos]
+    .filter((r) => !r.fork)
+    .sort((a, b) => b.stargazersCount - a.stargazersCount)
+    .slice(0, 5);
+
+  if (topRepos.length > 0) {
+    lines.push("", "Top repositories:");
+    for (const repo of topRepos) {
+      const desc = isNonEmpty(repo.description) ? `: ${(repo.description as string).trim()}` : "";
+      lines.push(`  - ${repo.name} (★${repo.stargazersCount}${desc})`);
+      if (isNonEmpty(repo.readmeExcerpt ?? null)) {
+        lines.push(`    README: ${(repo.readmeExcerpt as string).trim()}`);
+      }
+    }
+  }
+
+  // Profile README if present.
+  if (isNonEmpty(profile.profileReadme ?? null)) {
+    const excerpt = (profile.profileReadme as string).substring(0, 500).trim();
+    lines.push("", `Profile README:\n${excerpt}`);
+  }
+
+  return lines.join("\n");
 }
 
 /**
@@ -173,6 +199,6 @@ export function analyzeProfile(
 ): AnalysisResult {
   const stats = computeStats(repos, now);
   const score = computeScore(profile, stats);
-  const summary = buildSummary(profile, stats, score);
+  const summary = buildSummary(profile, stats, score, repos);
   return { stats, score, summary };
 }

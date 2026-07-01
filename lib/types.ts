@@ -20,6 +20,7 @@ export interface GitHubProfile {
   company: string | null;
   location: string | null;
   createdAt: string; // ISO
+  profileReadme?: string | null; // content of {username}/{username}/README.md if it exists
 }
 
 /** A single public repository, normalized from the GitHub REST API. */
@@ -32,6 +33,7 @@ export interface GitHubRepo {
   fork: boolean;
   homepage: string | null;
   pushedAt: string; // ISO
+  readmeExcerpt?: string | null; // first ~300 chars of README if fetched
 }
 
 /** Aggregate statistics computed by the Profile_Analyzer. */

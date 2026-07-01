@@ -47,6 +47,39 @@ interface RawGitHubRepo {
   pushed_at?: string;
 }
 
+/**
+ * Fetch and clean the README for a given repo. Returns null when the repo has
+ * no README (404) or on any error — missing READMEs are the common case and
+ * must never surface as an error to callers.
+ */
+async function fetchReadmeExcerpt(
+  owner: string,
+  repo: string,
+  headers: Record<string, string>,
+  maxLength: number,
+): Promise<string | null> {
+  try {
+    const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/README.md`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { content?: string; encoding?: string };
+    if (!data.content || data.encoding !== "base64") return null;
+    const raw = Buffer.from(data.content.replace(/\s/g, ""), "base64").toString("utf-8");
+    const cleaned = raw
+      .replace(/!\[.*?\]\(.*?\)/g, "")           // strip images
+      .replace(/```[\s\S]*?```/g, "")             // strip code blocks
+      .replace(/^#{1,6}\s+/gm, "")               // strip heading markers
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")   // links → text
+      .replace(/[*_~`]/g, "")                     // strip emphasis chars
+      .replace(/\s+/g, " ")                       // collapse whitespace
+      .trim();
+    if (!cleaned) return null;
+    return cleaned.length > maxLength ? cleaned.slice(0, maxLength) + "…" : cleaned;
+  } catch {
+    return null;
+  }
+}
+
 /** Build request headers, attaching the bearer token when configured. */
 function buildHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
@@ -181,9 +214,28 @@ export async function fetchGitHubData(
     };
   }
 
-  return {
-    ok: true,
-    profile: mapProfile(rawProfile),
-    repos: rawRepos.map(mapRepo),
-  };
+  const mappedProfile = mapProfile(rawProfile);
+  const mappedRepos = rawRepos.map(mapRepo);
+
+  // Top 3 non-forked repos by stars — fetch their READMEs in parallel with the
+  // profile README. All failures are silently swallowed via Promise.allSettled.
+  const topRepos = [...mappedRepos]
+    .filter((r) => !r.fork)
+    .sort((a, b) => b.stargazersCount - a.stargazersCount)
+    .slice(0, 3);
+
+  const readmeResults = await Promise.allSettled([
+    fetchReadmeExcerpt(username, username, headers, 600), // profile README
+    ...topRepos.map((r) => fetchReadmeExcerpt(username, r.name, headers, 300)),
+  ]);
+
+  mappedProfile.profileReadme =
+    readmeResults[0]?.status === "fulfilled" ? readmeResults[0].value : null;
+
+  topRepos.forEach((repo, i) => {
+    const r = readmeResults[i + 1];
+    if (r?.status === "fulfilled") repo.readmeExcerpt = r.value;
+  });
+
+  return { ok: true, profile: mappedProfile, repos: mappedRepos };
 }
