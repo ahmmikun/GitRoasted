@@ -250,6 +250,27 @@ a {
   }
 }
 
+@media (max-width: 560px) {
+  .profile-header {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center;
+  }
+
+  .profile-meta {
+    width: 100%;
+  }
+
+  .profile-meta-row {
+    justify-content: center !important;
+  }
+
+  .profile-score-row {
+    width: 100%;
+    justify-content: center !important;
+  }
+}
+
 @media (max-width: 380px) {
   .hero-title {
     font-size: clamp(2.5rem, 13vw, 3.5rem) !important;

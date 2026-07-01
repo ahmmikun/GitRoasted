@@ -139,10 +139,18 @@ export default function RoastResult({ data, shareUrl }: RoastResultProps) {
           </div>
         )}
 
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+        <div className="profile-meta" style={{ flex: 1, minWidth: 0 }}>
+          <div className="profile-meta-row" style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
             <GitBranch size={14} color="var(--muted)" strokeWidth={2.5} />
-            <span style={{ fontSize: "0.78rem", color: "var(--muted)", fontWeight: 600 }}>
+            <span
+              style={{
+                fontSize: "0.78rem",
+                color: "var(--muted)",
+                fontWeight: 600,
+                overflowWrap: "break-word",
+                wordBreak: "break-word",
+              }}
+            >
               github.com/{p.login}
             </span>
             <a
@@ -163,6 +171,8 @@ export default function RoastResult({ data, shareUrl }: RoastResultProps) {
               letterSpacing: "-0.02em",
               lineHeight: 1,
               marginBottom: "0.3rem",
+              overflowWrap: "break-word",
+              wordBreak: "break-word",
             }}
           >
             @{p.login}
@@ -181,7 +191,7 @@ export default function RoastResult({ data, shareUrl }: RoastResultProps) {
         </div>
 
         {/* Score + grade */}
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexShrink: 0 }}>
+        <div className="profile-score-row" style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexShrink: 0 }}>
           <div
             style={{
               background: "var(--surface-2)",
