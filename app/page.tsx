@@ -60,7 +60,7 @@ export default function Home() {
         >
           {/* Title block */}
           <div
-            className="brut-card"
+            className="brut-card hero-card"
             style={{
               padding: "2.5rem 2rem 2rem",
               marginBottom: "0",
@@ -84,6 +84,7 @@ export default function Home() {
 
             {/* Main title */}
             <h1
+              className="hero-title"
               style={{
                 fontSize: "clamp(3rem, 10vw, 5.5rem)",
                 fontWeight: 700,
@@ -115,6 +116,7 @@ export default function Home() {
 
           {/* Divider with icon */}
           <div
+            className="hero-divider"
             style={{
               background: "var(--yellow)",
               border: "3px solid var(--border)",
@@ -143,7 +145,7 @@ export default function Home() {
 
           {/* Form block */}
           <div
-            className="brut-card"
+            className="brut-card hero-form-card"
             style={{
               padding: "2rem",
               borderTop: "none",

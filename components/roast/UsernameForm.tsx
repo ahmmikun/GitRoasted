@@ -202,7 +202,7 @@ export default function UsernameForm() {
         GitHub username
       </label>
 
-      <div style={{ display: "flex", gap: "0.625rem", width: "100%" }}>
+      <div className="form-row">
         <input
           id="username-input"
           className="brut-input"

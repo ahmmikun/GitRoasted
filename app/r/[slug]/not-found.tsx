@@ -27,6 +27,7 @@ export default function NotFound() {
       />
 
       <div
+        className="notfound-card"
         style={{
           border: "3px solid var(--red)",
           boxShadow: "6px 6px 0px var(--red)",

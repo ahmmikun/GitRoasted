@@ -140,20 +140,24 @@ export default function StatsGrid({ stats }: StatsGridProps) {
   return (
     <Tooltip.Provider delayDuration={300}>
       <div
+        className="stats-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
           gap: "0",
           border: "3px solid var(--border)",
           boxShadow: "var(--shadow)",
+          overflow: "hidden",
         }}
       >
-        {cells.map((cell, i) => (
+        {cells.map((cell) => (
           <div
             key={cell.label}
             style={{
-              borderRight: i % 4 !== 3 ? "2px solid var(--border)" : undefined,
-              borderBottom: i < cells.length - 4 ? "2px solid var(--border)" : undefined,
+              borderRight: "2px solid var(--border)",
+              borderBottom: "2px solid var(--border)",
+              marginRight: "-2px",
+              marginBottom: "-2px",
             }}
           >
             <StatCell {...cell} />

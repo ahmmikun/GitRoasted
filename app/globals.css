@@ -198,3 +198,70 @@ a {
   border-bottom: 4px solid var(--yellow);
   line-height: 1;
 }
+
+/* ── Responsive layout ────────────────────────────────────────────────────── */
+
+.hero-title {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.form-row {
+  display: flex;
+  gap: 0.625rem;
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .form-row {
+    flex-direction: column;
+  }
+
+  .form-row .brut-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero-card {
+    padding: 1.75rem 1.25rem 1.5rem !important;
+  }
+
+  .hero-divider {
+    padding: 0.6rem 1.25rem !important;
+  }
+
+  .hero-form-card {
+    padding: 1.25rem !important;
+  }
+
+  .result-wrap {
+    padding: 1.5rem 1rem 3rem !important;
+  }
+
+  .profile-header {
+    padding: 1.25rem !important;
+    gap: 1rem !important;
+  }
+
+  .cta-card {
+    padding: 1.5rem 1.25rem !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .hero-title {
+    font-size: clamp(2.5rem, 13vw, 3.5rem) !important;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .notfound-card {
+    padding: 2rem 1.25rem !important;
+  }
+}

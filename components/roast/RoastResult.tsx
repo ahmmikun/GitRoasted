@@ -70,6 +70,7 @@ export default function RoastResult({ data, shareUrl }: RoastResultProps) {
 
   return (
     <div
+      className="result-wrap"
       style={{
         maxWidth: "760px",
         margin: "0 auto",
@@ -112,7 +113,7 @@ export default function RoastResult({ data, shareUrl }: RoastResultProps) {
 
       {/* Profile header */}
       <div
-        className="brut-card"
+        className="brut-card profile-header"
         style={{
           padding: "1.5rem",
           display: "flex",
@@ -375,6 +376,7 @@ export default function RoastResult({ data, shareUrl }: RoastResultProps) {
 
       {/* CTA */}
       <div
+        className="cta-card"
         style={{
           background: "var(--yellow)",
           border: "3px solid var(--border)",
