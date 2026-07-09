@@ -32,3 +32,10 @@ next-env.d.ts
 
 # vercel
 .vercel
+
+# editors / IDE
+.vscode
+.vs
+
+# kiro
+.kiro
