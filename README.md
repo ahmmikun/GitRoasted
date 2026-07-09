@@ -139,4 +139,4 @@ Uses Vitest with fast-check property-based tests covering validation, analysis, 
 
 ## License
 
-Private / unlicensed. Add a license before publishing.
+[MIT](LICENSE) © Salman Ahmad
