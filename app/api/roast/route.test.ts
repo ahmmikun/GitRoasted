@@ -15,50 +15,55 @@ vi.mock("@/lib/rate-limit", () => ({
   checkAndRecord: vi.fn().mockResolvedValue({ allowed: true, remaining: 4 }),
 }));
 
-vi.mock("@/lib/github", () => ({
-  fetchGitHubData: vi.fn().mockResolvedValue({
+// The route delegates GitHub fetching, scoring, and leaderboard-snapshot
+// persistence to the analysis service, so that is what we mock here.
+vi.mock("@/lib/analysis-service", () => ({
+  getProfileAnalysis: vi.fn().mockResolvedValue({
     ok: true,
-    profile: {
-      login: "testuser",
-      name: "Test User",
-      avatarUrl: "https://example.com/avatar.png",
-      bio: null,
-      followers: 10,
-      following: 5,
-      publicRepos: 3,
-      profileUrl: "https://github.com/testuser",
-      blog: null,
-      company: null,
-      location: null,
-      createdAt: "2020-01-01T00:00:00Z",
+    analysis: {
+      username: "testuser",
+      profile: {
+        login: "testuser",
+        name: "Test User",
+        avatarUrl: "https://example.com/avatar.png",
+        bio: null,
+        followers: 10,
+        following: 5,
+        publicRepos: 3,
+        profileUrl: "https://github.com/testuser",
+        blog: null,
+        company: null,
+        location: null,
+        createdAt: "2020-01-01T00:00:00Z",
+      },
+      stats: {
+        totalReposAnalyzed: 0,
+        totalStars: 0,
+        totalForks: 0,
+        topLanguages: [],
+        reposWithDescription: 0,
+        reposWithoutDescription: 0,
+        reposWithHomepage: 0,
+        recentlyUpdatedRepos: 0,
+        forkedRepos: 0,
+        originalRepos: 0,
+      },
+      score: 120,
+      grade: "F",
+      tier: { min: 0, label: "Getting Started", grade: "F" },
+      breakdown: [],
+      summary: "GitHub user: testuser\nDeveloper score: 120/1000",
+      repos: [],
+      fromSnapshot: false,
+      analyzedAt: new Date(),
     },
-    repos: [],
-  }),
-}));
-
-vi.mock("@/lib/analyzer", () => ({
-  analyzeProfile: vi.fn().mockReturnValue({
-    stats: {
-      totalReposAnalyzed: 0,
-      totalStars: 0,
-      totalForks: 0,
-      topLanguages: [],
-      reposWithDescription: 0,
-      reposWithoutDescription: 0,
-      reposWithHomepage: 0,
-      recentlyUpdatedRepos: 0,
-      forkedRepos: 0,
-      originalRepos: 0,
-    },
-    score: 10,
-    summary: "GitHub user: testuser\nDeveloper score: 10/100",
   }),
 }));
 
 vi.mock("@/lib/ai", () => ({
   generateRoast: vi.fn().mockResolvedValue({
     roast: {
-      score: 10,
+      score: 120,
       grade: "F",
       title: "Test Roast",
       shortRoast: "Short.",
@@ -104,7 +109,7 @@ import { POST } from "@/app/api/roast/route";
 import { GET } from "@/app/api/roast/[slug]/route";
 import { findCachedRoast } from "@/lib/cache";
 import { checkAndRecord } from "@/lib/rate-limit";
-import { fetchGitHubData } from "@/lib/github";
+import { getProfileAnalysis } from "@/lib/analysis-service";
 import { RoastModel } from "@/models/Roast";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -140,23 +145,45 @@ const cachedRecord: Partial<IRoast> & { _id: unknown; slug: string } = {
 beforeEach(() => {
   vi.mocked(findCachedRoast).mockResolvedValue(null);
   vi.mocked(checkAndRecord).mockResolvedValue({ allowed: true, remaining: 4 });
-  vi.mocked(fetchGitHubData).mockResolvedValue({
+  vi.mocked(getProfileAnalysis).mockResolvedValue({
     ok: true,
-    profile: {
-      login: "testuser",
-      name: null,
-      avatarUrl: "",
-      bio: null,
-      followers: 0,
-      following: 0,
-      publicRepos: 0,
-      profileUrl: "",
-      blog: null,
-      company: null,
-      location: null,
-      createdAt: "",
+    analysis: {
+      username: "testuser",
+      profile: {
+        login: "testuser",
+        name: null,
+        avatarUrl: "",
+        bio: null,
+        followers: 0,
+        following: 0,
+        publicRepos: 0,
+        profileUrl: "",
+        blog: null,
+        company: null,
+        location: null,
+        createdAt: "",
+      },
+      stats: {
+        totalReposAnalyzed: 0,
+        totalStars: 0,
+        totalForks: 0,
+        topLanguages: [],
+        reposWithDescription: 0,
+        reposWithoutDescription: 0,
+        reposWithHomepage: 0,
+        recentlyUpdatedRepos: 0,
+        forkedRepos: 0,
+        originalRepos: 0,
+      },
+      score: 120,
+      grade: "F",
+      tier: { min: 0, label: "Getting Started", grade: "F" },
+      breakdown: [],
+      summary: "GitHub user: testuser",
+      repos: [],
+      fromSnapshot: false,
+      analyzedAt: new Date(),
     },
-    repos: [],
   });
   vi.mocked(RoastModel.create).mockResolvedValue({ slug: "testuser-abc12" } as never);
 });
@@ -216,7 +243,7 @@ describe("POST /api/roast", () => {
   });
 
   it("returns 404 when the GitHub profile does not exist", async () => {
-    vi.mocked(fetchGitHubData).mockResolvedValueOnce({
+    vi.mocked(getProfileAnalysis).mockResolvedValueOnce({
       ok: false,
       kind: "not_found",
       message: "User not found",
@@ -229,7 +256,7 @@ describe("POST /api/roast", () => {
   });
 
   it("returns 502 on GitHub upstream error", async () => {
-    vi.mocked(fetchGitHubData).mockResolvedValueOnce({
+    vi.mocked(getProfileAnalysis).mockResolvedValueOnce({
       ok: false,
       kind: "upstream_error",
       message: "GitHub is down",

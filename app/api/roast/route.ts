@@ -13,8 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateUsername } from "@/lib/validators";
 import { findCachedRoast } from "@/lib/cache";
 import { checkAndRecord } from "@/lib/rate-limit";
-import { fetchGitHubData } from "@/lib/github";
-import { analyzeProfile } from "@/lib/analyzer";
+import { getProfileAnalysis } from "@/lib/analysis-service";
 import { generateRoast } from "@/lib/ai";
 import { generateSlug } from "@/lib/slug";
 import { connectToDatabase } from "@/lib/db";
@@ -99,23 +98,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 4. Fetch GitHub data.
-  const githubResult = await fetchGitHubData(username);
-  if (!githubResult.ok) {
-    if (githubResult.kind === "not_found") {
-      return errorResponse("NOT_FOUND", githubResult.message, 404);
+  // 4. Fetch GitHub data, score the profile, and refresh the leaderboard
+  //    snapshot. `force: true` guarantees a live fetch for a fresh roast.
+  const analysisResult = await getProfileAnalysis(username, { force: true });
+  if (!analysisResult.ok) {
+    if (analysisResult.kind === "not_found") {
+      return errorResponse("NOT_FOUND", analysisResult.message, 404);
     }
-    return errorResponse("UPSTREAM", githubResult.message, 502);
+    return errorResponse("UPSTREAM", analysisResult.message, 502);
   }
-  const { profile, repos } = githubResult;
 
-  // 5. Analyze the profile.
-  const { stats, score, summary } = analyzeProfile(profile, repos);
+  const { profile, stats, score, summary } = analysisResult.analysis;
 
-  // 6. Generate the roast.
+  // 5. Generate the roast from the canonical score.
   const { roast, aiMeta } = await generateRoast(summary, score, profile, stats);
 
-  // 7. Persist the Roast_Record with a unique slug (bounded retries on collision).
+  // 6. Persist the Roast_Record with a unique slug (bounded retries on collision).
   await connectToDatabase();
   const appUrl = getAppUrl();
 
