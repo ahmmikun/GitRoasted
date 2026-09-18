@@ -1,10 +1,26 @@
 // Feature: gitroasted — Property tests for the profile analyzer.
 // Covers tasks 4.2 (Property 4), 4.3 (Property 5), 4.4 (Property 6).
 
-import { describe, it } from "vitest";
+import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { analyzeProfile } from "./analyzer";
 import type { GitHubProfile, GitHubRepo } from "./types";
+
+/** A fixed, minimal profile for the deterministic (non-property) tests. */
+const baseProfile: GitHubProfile = {
+  login: "fixture",
+  name: null,
+  avatarUrl: "https://example.com/avatar.png",
+  bio: null,
+  followers: 0,
+  following: 0,
+  publicRepos: 0,
+  profileUrl: "https://github.com/fixture",
+  blog: null,
+  company: null,
+  location: null,
+  createdAt: "2020-01-01T00:00:00Z",
+};
 
 // Arbitrary for a GitHubProfile — only login is required to match the GitHub rule.
 const profileArb: fc.Arbitrary<GitHubProfile> = fc.record({
@@ -114,11 +130,34 @@ describe("Property 4: Analyzer aggregation is consistent", () => {
 
 // Feature: gitroasted, Property 5: Developer score is a bounded integer
 describe("Property 5: Developer score is a bounded integer", () => {
-  it("score is always an integer in the inclusive range [0, 100]", () => {
+  it("score is always an integer in the inclusive range [0, 1000]", () => {
     fc.assert(
       fc.property(profileArb, reposArb, (profile, repos) => {
         const { score } = analyzeProfile(profile, repos, NOW);
-        return Number.isInteger(score) && score >= 0 && score <= 100;
+        return Number.isInteger(score) && score >= 0 && score <= 1000;
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("score always equals the sum of the dimension breakdown", () => {
+    fc.assert(
+      fc.property(profileArb, reposArb, (profile, repos) => {
+        const { score, breakdown } = analyzeProfile(profile, repos, NOW);
+        return (
+          breakdown.length === 8 &&
+          breakdown.reduce((sum, d) => sum + d.score, 0) === score
+        );
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it("always reports a tier and grade consistent with the score", () => {
+    fc.assert(
+      fc.property(profileArb, reposArb, (profile, repos) => {
+        const { score, tier, grade } = analyzeProfile(profile, repos, NOW);
+        return score >= tier.min && grade === tier.grade && grade.length > 0;
       }),
       { numRuns: 100 },
     );
@@ -140,5 +179,127 @@ describe("Property 6: Analyzer produces a usable summary", () => {
       }),
       { numRuns: 100 },
     );
+  });
+
+  it("summary embeds the per-dimension breakdown for the AI prompt", () => {
+    fc.assert(
+      fc.property(profileArb, reposArb, (profile, repos) => {
+        const { summary, breakdown } = analyzeProfile(profile, repos, NOW);
+        return (
+          summary.includes("Score breakdown:") &&
+          breakdown.every((d) => summary.includes(`${d.label}: ${d.score}/${d.max}`))
+        );
+      }),
+      { numRuns: 50 },
+    );
+  });
+});
+
+// The analyzer must compute the extra stat fields the scorer depends on.
+describe("extended statistics for the scoring engine", () => {
+  it("counts distinct languages beyond the top-5 display cap", () => {
+    const repos: GitHubRepo[] = [
+      "TypeScript",
+      "Rust",
+      "Go",
+      "Python",
+      "C",
+      "Ruby",
+      "Elixir",
+    ].map((language, i) => ({
+      name: `repo-${i}`,
+      description: null,
+      language,
+      stargazersCount: 0,
+      forksCount: 0,
+      fork: false,
+      homepage: null,
+      pushedAt: "2024-12-01T00:00:00Z",
+    }));
+
+    const { stats } = analyzeProfile(baseProfile, repos, NOW);
+    expect(stats.topLanguages).toHaveLength(5);
+    expect(stats.distinctLanguages).toBe(7);
+  });
+
+  it("counts licenses, topics, READMEs and the top repo's stars", () => {
+    const repos: GitHubRepo[] = [
+      {
+        name: "a",
+        description: "described",
+        language: "TypeScript",
+        stargazersCount: 120,
+        forksCount: 4,
+        fork: false,
+        homepage: "https://example.com",
+        pushedAt: "2024-12-20T00:00:00Z",
+        license: "MIT",
+        topics: ["cli", "tooling"],
+        readmeExcerpt: "A helpful readme",
+      },
+      {
+        name: "b",
+        description: null,
+        language: "Rust",
+        stargazersCount: 3,
+        forksCount: 0,
+        fork: false,
+        homepage: null,
+        pushedAt: "2024-11-01T00:00:00Z",
+        license: null,
+        topics: [],
+      },
+    ];
+
+    const { stats } = analyzeProfile(baseProfile, repos, NOW);
+    expect(stats.reposWithLicense).toBe(1);
+    expect(stats.reposWithTopics).toBe(1);
+    expect(stats.reposWithReadme).toBe(1);
+    expect(stats.maxRepoStars).toBe(120);
+  });
+
+  it("computes days since the most recent push, and null when unknown", () => {
+    const repos: GitHubRepo[] = [
+      {
+        name: "old",
+        description: null,
+        language: null,
+        stargazersCount: 0,
+        forksCount: 0,
+        fork: false,
+        homepage: null,
+        pushedAt: "2024-01-01T00:00:00Z",
+      },
+      {
+        name: "new",
+        description: null,
+        language: null,
+        stargazersCount: 0,
+        forksCount: 0,
+        fork: false,
+        homepage: null,
+        // Exactly 10 days before NOW (2025-01-01).
+        pushedAt: "2024-12-22T00:00:00Z",
+      },
+    ];
+
+    expect(analyzeProfile(baseProfile, repos, NOW).stats.daysSinceLastPush).toBe(10);
+    expect(analyzeProfile(baseProfile, [], NOW).stats.daysSinceLastPush).toBeNull();
+  });
+
+  it("uses contribution data for the Consistency dimension when supplied", () => {
+    const withData = analyzeProfile(baseProfile, [], NOW, {
+      totalContributions: 1500,
+      activeWeeks: 52,
+      longestStreakDays: 100,
+      estimated: false,
+    });
+    const withoutData = analyzeProfile(baseProfile, [], NOW, null);
+
+    const consistencyWith = withData.breakdown.find((d) => d.key === "consistency")!;
+    const consistencyWithout = withoutData.breakdown.find((d) => d.key === "consistency")!;
+
+    expect(consistencyWith.score).toBeGreaterThan(consistencyWithout.score);
+    expect(consistencyWith.detail).toContain("1,500");
   });
 });

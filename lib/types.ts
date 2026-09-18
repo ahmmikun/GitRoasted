@@ -23,7 +23,13 @@ export interface GitHubProfile {
   profileReadme?: string | null; // content of {username}/{username}/README.md if it exists
 }
 
-/** A single public repository, normalized from the GitHub REST API. */
+/**
+ * A single public repository, normalized from the GitHub REST API.
+ *
+ * Fields marked optional are either fetched opportunistically (README) or were
+ * added after the first release; records persisted before then will not have
+ * them, so every consumer must tolerate `undefined`.
+ */
 export interface GitHubRepo {
   name: string;
   description: string | null;
@@ -34,9 +40,19 @@ export interface GitHubRepo {
   homepage: string | null;
   pushedAt: string; // ISO
   readmeExcerpt?: string | null; // first ~300 chars of README if fetched
+  license?: string | null; // SPDX id, e.g. "mit"
+  topics?: string[]; // repository topics
+  watchers?: number;
+  openIssues?: number;
 }
 
-/** Aggregate statistics computed by the Profile_Analyzer. */
+/**
+ * Aggregate statistics computed by the Profile_Analyzer.
+ *
+ * The fields at the end are optional for backward compatibility with
+ * `Roast` documents persisted before the scoring redesign. Scoring and
+ * recommendation code substitutes safe defaults when they are absent.
+ */
 export interface GitHubStats {
   totalReposAnalyzed: number;
   totalStars: number;
@@ -48,18 +64,89 @@ export interface GitHubStats {
   recentlyUpdatedRepos: number;
   forkedRepos: number;
   originalRepos: number;
+  /** Count of distinct languages across all repos (not capped like topLanguages). */
+  distinctLanguages?: number;
+  reposWithLicense?: number;
+  reposWithTopics?: number;
+  /** Repos among those inspected that had a README we could read. */
+  reposWithReadme?: number;
+  /** Highest star count on any single repo. */
+  maxRepoStars?: number;
+  /** Whole days since the most recent push across all repos; null when unknown. */
+  daysSinceLastPush?: number | null;
 }
 
-/** Result of analyzing a profile: stats, developer score, and AI prompt summary. */
+/**
+ * Contribution activity for the trailing year.
+ *
+ * Sourced from the GitHub GraphQL contributions calendar when a token is
+ * available. `estimated` marks values derived from a weaker fallback signal so
+ * the scorer can avoid penalising a profile for our own missing data.
+ */
+export interface ContributionData {
+  /** Total contributions in the trailing year. */
+  totalContributions: number;
+  /** Weeks in the trailing year containing at least one contribution. */
+  activeWeeks: number;
+  /** Longest run of consecutive contributing days in the trailing year. */
+  longestStreakDays: number;
+  /** True when these numbers are inferred rather than read from the calendar. */
+  estimated: boolean;
+}
+
+/** Stable identifiers for the eight scoring dimensions. */
+export type ScoreDimensionKey =
+  | "impact"
+  | "consistency"
+  | "quality"
+  | "community"
+  | "diversity"
+  | "experience"
+  | "activity"
+  | "bonuses";
+
+/** A single scored dimension of the Developer_Score. */
+export interface DimensionScore {
+  key: ScoreDimensionKey;
+  label: string;
+  score: number;
+  max: number;
+  /** Human-readable explanation of what produced this score. */
+  detail: string;
+}
+
+/** A score tier: a named band of the 0–1000 range with a letter grade. */
+export interface ScoreTier {
+  /** Inclusive lower bound of the band. */
+  min: number;
+  label: string;
+  grade: string;
+}
+
+/** The complete result of scoring a profile. */
+export interface ScoreResult {
+  total: number;
+  breakdown: DimensionScore[];
+  tier: ScoreTier;
+  grade: string;
+}
+
+/**
+ * Result of analyzing a profile: stats, the Developer_Score with its
+ * per-dimension breakdown, and the compact AI-prompt summary.
+ */
 export interface AnalysisResult {
   stats: GitHubStats;
-  score: number; // integer 0..100
+  score: number; // integer 0..1000
+  breakdown: DimensionScore[];
+  tier: ScoreTier;
+  grade: string;
   summary: string; // compact text for the AI prompt
 }
 
 /** The structured roast produced by an AI provider, the rule-based engine, or the default. */
 export interface RoastOutput {
-  score: number; // 0..100
+  score: number; // 0..1000
   grade: string;
   title: string;
   shortRoast: string;

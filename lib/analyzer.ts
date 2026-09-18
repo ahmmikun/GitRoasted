@@ -2,18 +2,27 @@
  * Profile_Analyzer for GitRoasted.
  *
  * Pure logic that turns a GitHub profile and its repositories into aggregate
- * statistics, a clamped/rounded Developer_Score in [0, 100], and a compact
- * multi-line summary suitable for embedding in an AI prompt.
+ * statistics, the 1000-point Developer_Score with its per-dimension breakdown
+ * (see `lib/scoring.ts`), and a compact multi-line summary suitable for
+ * embedding in an AI prompt.
  *
  * Correctness properties (see design.md):
  *  - totalStars === sum of repo stars; totalForks === sum of repo forks.
  *  - reposWithDescription + reposWithoutDescription === totalReposAnalyzed.
  *  - originalRepos + forkedRepos === totalReposAnalyzed.
  *  - An empty repo list yields zero for every repository-derived statistic.
- *  - The score is always an integer in the inclusive range 0..100.
+ *  - The score is always an integer in the inclusive range 0..1000.
  */
 
-import type { AnalysisResult, GitHubProfile, GitHubRepo, GitHubStats } from "./types";
+import type {
+  AnalysisResult,
+  ContributionData,
+  GitHubProfile,
+  GitHubRepo,
+  GitHubStats,
+  ScoreResult,
+} from "./types";
+import { MAX_SCORE, computeDeveloperScore } from "./scoring";
 
 /** Number of top languages to surface in the stats and summary. */
 const TOP_LANGUAGES_LIMIT = 5;
@@ -33,6 +42,14 @@ function isNonEmpty(value: string | null | undefined): boolean {
  * frequency (descending) with name as a deterministic tie-breaker.
  */
 function computeTopLanguages(repos: GitHubRepo[]): string[] {
+  return [...countLanguages(repos).entries()]
+    .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))
+    .slice(0, TOP_LANGUAGES_LIMIT)
+    .map(([lang]) => lang);
+}
+
+/** Tally repositories per language. Repos with no detected language are skipped. */
+function countLanguages(repos: GitHubRepo[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const repo of repos) {
     if (isNonEmpty(repo.language)) {
@@ -40,10 +57,7 @@ function computeTopLanguages(repos: GitHubRepo[]): string[] {
       counts.set(lang, (counts.get(lang) ?? 0) + 1);
     }
   }
-  return [...counts.entries()]
-    .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))
-    .slice(0, TOP_LANGUAGES_LIMIT)
-    .map(([lang]) => lang);
+  return counts;
 }
 
 /** Count repositories whose `pushedAt` falls within the recent-activity window. */
@@ -58,6 +72,23 @@ function countRecentlyUpdated(repos: GitHubRepo[], now: number): number {
   return count;
 }
 
+/**
+ * Whole days since the most recent push across all repositories.
+ * Returns null when no repository has a parseable push timestamp.
+ */
+function computeDaysSinceLastPush(repos: GitHubRepo[], now: number): number | null {
+  let latest: number | null = null;
+  for (const repo of repos) {
+    const pushed = Date.parse(repo.pushedAt);
+    if (!Number.isNaN(pushed) && (latest === null || pushed > latest)) {
+      latest = pushed;
+    }
+  }
+  if (latest === null) return null;
+  // Clamp at 0 so clock skew never yields a negative age.
+  return Math.max(0, Math.floor((now - latest) / MS_PER_DAY));
+}
+
 /** Compute the aggregate GitHub statistics. Every field is present even for an empty repo list. */
 function computeStats(repos: GitHubRepo[], now: number): GitHubStats {
   const totalReposAnalyzed = repos.length;
@@ -67,6 +98,10 @@ function computeStats(repos: GitHubRepo[], now: number): GitHubStats {
   let reposWithDescription = 0;
   let reposWithHomepage = 0;
   let forkedRepos = 0;
+  let reposWithLicense = 0;
+  let reposWithTopics = 0;
+  let reposWithReadme = 0;
+  let maxRepoStars = 0;
 
   for (const repo of repos) {
     totalStars += repo.stargazersCount;
@@ -74,6 +109,10 @@ function computeStats(repos: GitHubRepo[], now: number): GitHubStats {
     if (isNonEmpty(repo.description)) reposWithDescription += 1;
     if (isNonEmpty(repo.homepage)) reposWithHomepage += 1;
     if (repo.fork) forkedRepos += 1;
+    if (isNonEmpty(repo.license ?? null)) reposWithLicense += 1;
+    if (Array.isArray(repo.topics) && repo.topics.length > 0) reposWithTopics += 1;
+    if (isNonEmpty(repo.readmeExcerpt ?? null)) reposWithReadme += 1;
+    if (repo.stargazersCount > maxRepoStars) maxRepoStars = repo.stargazersCount;
   }
 
   return {
@@ -89,56 +128,25 @@ function computeStats(repos: GitHubRepo[], now: number): GitHubStats {
     forkedRepos,
     // Defined as the complement so the partition always sums to the total.
     originalRepos: totalReposAnalyzed - forkedRepos,
+    distinctLanguages: countLanguages(repos).size,
+    reposWithLicense,
+    reposWithTopics,
+    reposWithReadme,
+    maxRepoStars,
+    daysSinceLastPush: computeDaysSinceLastPush(repos, now),
   };
 }
 
-/** Clamp `value` into the inclusive range [min, max]. */
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
 /**
- * Compute the Developer_Score from profile-only and repo-derived signals.
+ * Build the compact multi-line summary embedded into the AI prompt.
  *
- * Each signal contributes a bounded amount so no single dimension dominates;
- * the accumulated raw value is clamped to [0, 100] and rounded to an integer.
- * For a zero-repository profile only the profile signals contribute.
+ * The Developer_Score and its per-dimension breakdown are included so the
+ * model roasts the same numbers the UI displays rather than inventing its own.
  */
-function computeScore(profile: GitHubProfile, stats: GitHubStats): number {
-  let raw = 0;
-
-  // Repository breadth (original repos), capped.
-  raw += clamp(stats.originalRepos * 2, 0, 20);
-
-  // Community traction.
-  raw += clamp(stats.totalStars, 0, 25);
-  raw += clamp(stats.totalForks, 0, 10);
-
-  // Language diversity.
-  raw += clamp(stats.topLanguages.length * 3, 0, 15);
-
-  // Description coverage ratio (only meaningful when repos exist).
-  if (stats.totalReposAnalyzed > 0) {
-    const coverage = stats.reposWithDescription / stats.totalReposAnalyzed;
-    raw += coverage * 15;
-  }
-
-  // Recent activity.
-  raw += clamp(stats.recentlyUpdatedRepos * 2, 0, 15);
-
-  // Profile completeness signals.
-  if (isNonEmpty(profile.bio)) raw += 5;
-  if (isNonEmpty(profile.blog)) raw += 3;
-  if (isNonEmpty(profile.company)) raw += 2;
-
-  return clamp(Math.round(raw), 0, 100);
-}
-
-/** Build the compact multi-line summary embedded into the AI prompt. */
 function buildSummary(
   profile: GitHubProfile,
   stats: GitHubStats,
-  score: number,
+  score: ScoreResult,
   repos: GitHubRepo[],
 ): string {
   const name = isNonEmpty(profile.name) ? (profile.name as string) : profile.login;
@@ -154,7 +162,12 @@ function buildSummary(
     `Top languages: ${languages}`,
     `Descriptions: ${stats.reposWithDescription} with / ${stats.reposWithoutDescription} without`,
     `Repos with homepage: ${stats.reposWithHomepage} | Recently updated: ${stats.recentlyUpdatedRepos}`,
-    `Developer score: ${score}/100`,
+    `Developer score: ${score.total}/${MAX_SCORE} (grade ${score.grade}, tier ${score.tier.label})`,
+    "",
+    "Score breakdown:",
+    ...score.breakdown.map(
+      (d) => `  - ${d.label}: ${d.score}/${d.max} — ${d.detail}`,
+    ),
   ];
 
   // Top 5 non-forked repos by stars with README excerpts.
@@ -184,21 +197,32 @@ function buildSummary(
 }
 
 /**
- * Analyze a GitHub profile and its repositories into stats, a developer score,
- * and a compact AI-prompt summary.
+ * Analyze a GitHub profile and its repositories into stats, the 1000-point
+ * Developer_Score with its per-dimension breakdown, and a compact AI-prompt
+ * summary.
  *
- * @param profile Normalized public profile data.
- * @param repos   Normalized public repositories (may be empty).
- * @param now     Optional reference time (ms) for recent-activity detection;
- *                defaults to the current time. Injectable for testability.
+ * @param profile       Normalized public profile data.
+ * @param repos         Normalized public repositories (may be empty).
+ * @param now           Optional reference time (ms) for recency calculations;
+ *                      defaults to the current time. Injectable for testability.
+ * @param contributions Optional trailing-year contribution data. When null the
+ *                      Consistency dimension degrades to a capped estimate.
  */
 export function analyzeProfile(
   profile: GitHubProfile,
   repos: GitHubRepo[],
   now: number = Date.now(),
+  contributions: ContributionData | null = null,
 ): AnalysisResult {
   const stats = computeStats(repos, now);
-  const score = computeScore(profile, stats);
+  const score = computeDeveloperScore(profile, stats, contributions, now);
   const summary = buildSummary(profile, stats, score, repos);
-  return { stats, score, summary };
+  return {
+    stats,
+    score: score.total,
+    breakdown: score.breakdown,
+    tier: score.tier,
+    grade: score.grade,
+    summary,
+  };
 }

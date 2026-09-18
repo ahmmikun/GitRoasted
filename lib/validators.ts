@@ -8,6 +8,7 @@
 
 import { z } from "zod";
 import type { RoastOutput } from "./types";
+import { MAX_SCORE } from "./scoring";
 
 /**
  * GitHub username rule: 1–39 chars, alphanumeric or hyphen, no leading or
@@ -32,12 +33,12 @@ export const roastRequestSchema = z.object({
 });
 
 /**
- * Strict schema for AI-produced roast output. A score outside 0..100 fails
+ * Strict schema for AI-produced roast output. A score outside 0..1000 fails
  * validation, so the response is treated as invalid and the fallback chain
- * continues.
+ * continues. The upper bound matches `MAX_SCORE` in `lib/scoring.ts`.
  */
 export const roastOutputSchema = z.object({
-  score: z.number().int().min(0).max(100),
+  score: z.number().int().min(0).max(MAX_SCORE),
   grade: z.string().min(1),
   title: z.string().min(1),
   shortRoast: z.string().min(1),

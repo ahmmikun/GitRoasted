@@ -51,18 +51,18 @@ describe("Property 11: Out-of-range scores are rejected", () => {
     );
   });
 
-  it("rejects scores above 100", () => {
+  it("rejects scores above 1000", () => {
     fc.assert(
-      fc.property(fc.integer({ min: 101 }), (score) => {
+      fc.property(fc.integer({ min: 1001 }), (score) => {
         return parseRoastOutput({ ...validRoast, score }).ok === false;
       }),
       { numRuns: 100 },
     );
   });
 
-  it("accepts any integer score in [0, 100]", () => {
+  it("accepts any integer score in [0, 1000]", () => {
     fc.assert(
-      fc.property(fc.integer({ min: 0, max: 100 }), (score) => {
+      fc.property(fc.integer({ min: 0, max: 1000 }), (score) => {
         return parseRoastOutput({ ...validRoast, score }).ok === true;
       }),
       { numRuns: 100 },
