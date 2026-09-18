@@ -8,9 +8,12 @@ import {
   Trophy,
   ExternalLink,
   ArrowRight,
+  Target,
 } from "lucide-react";
 import * as Separator from "@radix-ui/react-separator";
 import type { GitHubProfile, GitHubStats, RoastOutput } from "@/lib/types";
+import { MAX_SCORE, computeDeveloperScore } from "@/lib/scoring";
+import { buildRoadmap } from "@/lib/recommendations";
 import ShareButtons from "./ShareButtons";
 import StatsGrid from "./StatsGrid";
 
@@ -34,6 +37,7 @@ function gradeConfig(grade: string): { color: string; shadow: string; bg: string
     case "B": return { color: "#00e5ff", shadow: "4px 4px 0px #00e5ff", bg: "rgba(0,229,255,0.08)" };
     case "C": return { color: "#ff8800", shadow: "4px 4px 0px #ff8800", bg: "rgba(255,136,0,0.08)" };
     case "D": return { color: "#ff5500", shadow: "4px 4px 0px #ff5500", bg: "rgba(255,85,0,0.08)" };
+    case "E": return { color: "#ff4422", shadow: "4px 4px 0px #ff4422", bg: "rgba(255,68,34,0.08)" };
     default:  return { color: "#ff2d2d", shadow: "4px 4px 0px #ff2d2d", bg: "rgba(255,45,45,0.08)" };
   }
 }
@@ -68,6 +72,17 @@ export default function RoastResult({ data, shareUrl }: RoastResultProps) {
   const { githubProfile: p, githubStats: stats, analysis: roast } = data;
   const grade = gradeConfig(roast.grade);
 
+  // Recompute the breakdown from the stored snapshot so the measured advice
+  // stays correct even for roasts saved before the roadmap existed.
+  const { breakdown } = computeDeveloperScore(p, stats, null);
+  const roadmap = buildRoadmap(p, stats, breakdown);
+  // Quick wins first — they are the most actionable on a results page.
+  const topRecommendations = [
+    ...roadmap.quickWins,
+    ...roadmap.shortTerm,
+    ...roadmap.longTerm,
+  ].slice(0, 3);
+
   return (
     <div
       className="result-wrap"
@@ -80,37 +95,6 @@ export default function RoastResult({ data, shareUrl }: RoastResultProps) {
         gap: "1.25rem",
       }}
     >
-      {/* Top stripe */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: "fixed",
-          top: 0, left: 0, right: 0,
-          height: "6px",
-          background:
-            "repeating-linear-gradient(90deg, var(--yellow) 0px, var(--yellow) 40px, #000 40px, #000 80px)",
-          zIndex: 50,
-        }}
-      />
-
-      {/* Back link */}
-      <a
-        href="/"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "0.4rem",
-          fontSize: "0.78rem",
-          fontWeight: 700,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "var(--muted)",
-          marginTop: "1rem",
-        }}
-      >
-        ← New roast
-      </a>
-
       {/* Profile header */}
       <div
         className="brut-card profile-header"
@@ -199,10 +183,10 @@ export default function RoastResult({ data, shareUrl }: RoastResultProps) {
               boxShadow: grade.shadow,
               padding: "0.75rem 1rem",
               textAlign: "center",
-              minWidth: "72px",
+              minWidth: "92px",
             }}
           >
-            <div style={{ fontSize: "2.25rem", fontWeight: 700, lineHeight: 1, color: grade.color }}>
+            <div style={{ fontSize: "2rem", fontWeight: 700, lineHeight: 1, color: grade.color }}>
               {roast.score}
             </div>
             <div
@@ -215,7 +199,7 @@ export default function RoastResult({ data, shareUrl }: RoastResultProps) {
                 marginTop: "2px",
               }}
             >
-              / 100
+              / {MAX_SCORE}
             </div>
           </div>
 
@@ -361,6 +345,41 @@ export default function RoastResult({ data, shareUrl }: RoastResultProps) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Data-driven improvement roadmap, derived from the stored stats.
+          Distinct from the AI tips above: these are measured, not generated. */}
+      {topRecommendations.length > 0 && (
+        <div
+          className="brut-card"
+          style={{ padding: "1.25rem", borderColor: "var(--cyan)", boxShadow: "4px 4px 0px var(--cyan)" }}
+        >
+          <SectionTitle
+            icon={<Target size={14} strokeWidth={2.5} />}
+            label="Measured next steps"
+            color="var(--cyan)"
+          />
+          <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+            {topRecommendations.map((rec) => (
+              <li key={rec.id}>
+                <p style={{ fontSize: "0.92rem", fontWeight: 700, marginBottom: "0.2rem" }}>
+                  {rec.title}
+                </p>
+                <p style={{ fontSize: "0.82rem", color: "var(--muted)", lineHeight: 1.55 }}>
+                  {rec.why}
+                </p>
+              </li>
+            ))}
+          </ul>
+          <a
+            href={`/improve?username=${encodeURIComponent(data.username)}`}
+            className="lb-link"
+            style={{ marginTop: "1rem", display: "inline-flex" }}
+          >
+            See the full roadmap
+            <ArrowRight size={13} strokeWidth={2.5} aria-hidden="true" />
+          </a>
         </div>
       )}
 

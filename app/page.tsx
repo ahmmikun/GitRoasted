@@ -1,6 +1,14 @@
+import type { Metadata } from "next";
 import { Flame, GitBranch, Zap } from "lucide-react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import UsernameForm from "@/components/roast/UsernameForm";
+
+export const metadata: Metadata = {
+  title: "Analyze a GitHub Profile",
+  description:
+    "Score any public GitHub profile out of 1000 across impact, consistency, quality, community, diversity, experience, activity, and bonuses.",
+  alternates: { canonical: "/" },
+};
 
 function HeroFallback() {
   return (
@@ -24,7 +32,6 @@ export default function Home() {
   return (
     <main
       style={{
-        minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -33,20 +40,6 @@ export default function Home() {
         background: "var(--bg)",
       }}
     >
-      {/* Decorative top stripe */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "6px",
-          background: "repeating-linear-gradient(90deg, var(--yellow) 0px, var(--yellow) 40px, #000 40px, #000 80px)",
-          zIndex: 50,
-        }}
-      />
-
       <ErrorBoundary fallback={<HeroFallback />}>
         <section
           aria-label="Hero"
@@ -184,19 +177,6 @@ export default function Home() {
           </div>
         </section>
       </ErrorBoundary>
-
-      {/* Bottom stripe */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: "4px",
-          background: "repeating-linear-gradient(90deg, var(--red) 0px, var(--red) 40px, #000 40px, #000 80px)",
-        }}
-      />
     </main>
   );
 }
