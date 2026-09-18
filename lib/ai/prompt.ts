@@ -22,8 +22,8 @@ export const ROAST_SYSTEM_PROMPT = [
   "Write jokes that are funny but safe: never hateful, discriminatory, or a personal attack on protected characteristics.",
   "Respond with ONLY a single JSON object and no surrounding prose or markdown.",
   "The JSON object MUST have exactly these keys:",
-  '- "score": integer 0..100 (overall developer score)',
-  '- "grade": short letter grade string (e.g. "A", "B", "C")',
+  '- "score": integer 0..1000 — copy the "Developer score" value from the supplied summary EXACTLY. Do not invent or recalculate it.',
+  '- "grade": the grade letter given in the supplied summary (e.g. "S", "A", "B")',
   '- "title": short punchy title string',
   '- "shortRoast": one-sentence roast string',
   '- "longRoast": multi-sentence roast string',
@@ -31,6 +31,7 @@ export const ROAST_SYSTEM_PROMPT = [
   '- "weaknesses": array of strings',
   '- "improvementTips": array of strings',
   '- "shareCaption": short shareable caption string',
+  "Base your strengths, weaknesses, and tips on the score breakdown in the summary so the roast matches the real numbers.",
 ].join("\n");
 
 /**

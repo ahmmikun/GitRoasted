@@ -2,35 +2,33 @@
  * Rule_Based_Engine — the local roast generator.
  *
  * `ruleBasedRoast` builds a roast from simple heuristics over the profile and
- * computed stats, deriving a grade from the analyzer score. `DEFAULT_ROAST` is
+ * computed stats, deriving a grade from the Developer_Score. `DEFAULT_ROAST` is
  * a hardcoded constant used as the last-resort fallback. Both are guaranteed to
- * satisfy `roastOutputSchema` (score is an integer in 0..100 and every string
+ * satisfy `roastOutputSchema` (score is an integer in 0..1000 and every string
  * field is non-empty).
  */
 
 import type { GitHubProfile, GitHubStats, RoastOutput } from "../types";
+import { MAX_SCORE, tierForScore } from "../scoring";
 
 /** Number of repos at or below which a portfolio is considered "thin". */
 const LOW_REPO_THRESHOLD = 3;
 
-/** Clamp a raw score to an integer within the inclusive range 0..100. */
+/** Score at or above which the roast softens its tone. */
+const RESPECTABLE_SCORE = 700;
+
+/** Clamp a raw score to an integer within the inclusive range 0..MAX_SCORE. */
 function clampScore(score: number): number {
   if (!Number.isFinite(score)) return 0;
-  return Math.max(0, Math.min(100, Math.round(score)));
+  return Math.max(0, Math.min(MAX_SCORE, Math.round(score)));
 }
 
 /**
- * Derive a letter grade from the developer score.
- * The bands cover the full 0..100 range so any clamped score maps to a grade.
+ * Derive a letter grade from the Developer_Score using the shared tier bands,
+ * so the fallback grade always matches the rest of the application.
  */
 function gradeFromScore(score: number): string {
-  if (score >= 90) return "S";
-  if (score >= 80) return "A";
-  if (score >= 70) return "B";
-  if (score >= 60) return "C";
-  if (score >= 50) return "D";
-  if (score >= 35) return "E";
-  return "F";
+  return tierForScore(score).grade;
 }
 
 /**
@@ -129,23 +127,23 @@ export function ruleBasedRoast(
   }
 
   const shortRoast =
-    safeScore >= 70
+    safeScore >= RESPECTABLE_SCORE
       ? `${displayName} actually knows what they're doing. Grade ${grade}, and it shows.`
       : `${displayName} has a GitHub profile and the courage to let people see it. Grade ${grade}.`;
 
   const longRoast = [
-    `${displayName} scored ${safeScore}/100 (grade ${grade}).`,
+    `${displayName} scored ${safeScore}/${MAX_SCORE} (grade ${grade}).`,
     `Across ${stats.totalReposAnalyzed} repo(s), there are ${stats.totalStars} star(s) and ${stats.totalForks} fork(s) to show for it.`,
     weaknesses[0],
     improvementTips[0],
   ].join(" ");
 
   const title =
-    safeScore >= 70
+    safeScore >= RESPECTABLE_SCORE
       ? `${displayName}: Quietly Competent`
       : `${displayName}: A Work in Progress`;
 
-  const shareCaption = `I got roasted on GitRoasted and scored ${safeScore}/100 (grade ${grade}). Can you beat me?`;
+  const shareCaption = `I scored ${safeScore}/${MAX_SCORE} (grade ${grade}) on GitRoasted. Can you beat me?`;
 
   return {
     score: safeScore,
@@ -165,7 +163,7 @@ export function ruleBasedRoast(
  * rule-based engine fail. Always satisfies `roastOutputSchema`.
  */
 export const DEFAULT_ROAST: RoastOutput = {
-  score: 50,
+  score: 500,
   grade: "C",
   title: "The Mysterious Developer",
   shortRoast:

@@ -15,11 +15,13 @@ import { openAiProvider } from "./openai";
 import { grokProvider } from "./grok";
 import { ruleBasedRoast, DEFAULT_ROAST } from "./fallback";
 import { parseRoastOutput } from "../validators";
+import { MAX_SCORE, tierForScore } from "../scoring";
 import type {
   AiProvider,
   GenerationResult,
   GitHubProfile,
   GitHubStats,
+  RoastOutput,
 } from "../types";
 
 const PROVIDERS: AiProvider[] = [
@@ -28,6 +30,19 @@ const PROVIDERS: AiProvider[] = [
   openAiProvider,
   grokProvider,
 ];
+
+/**
+ * Force the canonical Developer_Score onto a roast.
+ *
+ * The score shown on the result page, the leaderboard, and the comparison view
+ * must all be the same number, so the analyzer is the single source of truth.
+ * Models are asked to echo it back, but we overwrite it regardless in case a
+ * provider recalculates or hallucinates a different value.
+ */
+function withCanonicalScore(roast: RoastOutput, analyzerScore: number): RoastOutput {
+  const score = Math.max(0, Math.min(MAX_SCORE, Math.round(analyzerScore)));
+  return { ...roast, score, grade: tierForScore(score).grade };
+}
 
 /**
  * Generate a roast by trying external AI providers in priority order.
@@ -57,7 +72,7 @@ export async function generateRoast(
     const parsed = parseRoastOutput(raw);
     if (parsed.ok) {
       return {
-        roast: parsed.value,
+        roast: withCanonicalScore(parsed.value, analyzerScore),
         aiMeta: {
           providerUsed: provider.name,
           modelUsed: provider.model,
@@ -75,7 +90,7 @@ export async function generateRoast(
     const parsed = parseRoastOutput(roast);
     if (parsed.ok) {
       return {
-        roast: parsed.value,
+        roast: withCanonicalScore(parsed.value, analyzerScore),
         aiMeta: {
           providerUsed: "rule_based",
           modelUsed: "rule_based",
@@ -88,9 +103,9 @@ export async function generateRoast(
     // Rule-based engine failed — fall through to DEFAULT_ROAST.
   }
 
-  // Last resort: hardcoded default.
+  // Last resort: hardcoded default, still carrying the canonical score.
   return {
-    roast: DEFAULT_ROAST,
+    roast: withCanonicalScore(DEFAULT_ROAST, analyzerScore),
     aiMeta: {
       providerUsed: "default",
       modelUsed: "default",
