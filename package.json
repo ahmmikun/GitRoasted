@@ -7,9 +7,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "script": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local --env-file-if-exists=.env --import ./scripts/register-loader.mjs",
+    "migrate:scores": "npm run script -- ./scripts/migrate-scores.ts",
+    "seed:leaderboard": "npm run script -- ./scripts/seed-leaderboard.ts"
   },
   "dependencies": {
     "@radix-ui/react-separator": "^1.1.11",
