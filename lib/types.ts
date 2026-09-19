@@ -21,6 +21,7 @@ export interface GitHubProfile {
   location: string | null;
   createdAt: string; // ISO
   profileReadme?: string | null; // content of {username}/{username}/README.md if it exists
+  hasProfileReadme?: boolean; // verified presence of a valid, usable profile README
 }
 
 /**
@@ -40,10 +41,37 @@ export interface GitHubRepo {
   homepage: string | null;
   pushedAt: string; // ISO
   readmeExcerpt?: string | null; // first ~300 chars of README if fetched
-  license?: string | null; // SPDX id, e.g. "mit"
+  hasReadme?: boolean | null; // true if verified present, false if verified missing
+  license?: string | null; // SPDX id or key, e.g. "mit", "other"
+  licenseName?: string | null; // Human-readable name, e.g. "MIT License"
+  hasLicense?: boolean; // true if license metadata or file detected
   topics?: string[]; // repository topics
+  hasTopics?: boolean;
+  hasDescription?: boolean;
+  hasHomepage?: boolean;
   watchers?: number;
   openIssues?: number;
+}
+
+/** Detailed audit information for a repository that has missing documentation or metadata. */
+export interface RepoAuditIssue {
+  repoName: string;
+  isFork: boolean;
+  missing: Array<"readme" | "license" | "topics" | "description" | "homepage">;
+  detected: {
+    hasDescription: boolean;
+    description?: string | null;
+    hasReadme: boolean | null;
+    readmeExcerpt?: string | null;
+    hasLicense: boolean;
+    licenseName?: string | null;
+    hasTopics: boolean;
+    topics?: string[];
+    hasHomepage: boolean;
+    homepage?: string | null;
+  };
+  evidence: string;
+  recommendedFix: string;
 }
 
 /**
@@ -74,6 +102,16 @@ export interface GitHubStats {
   maxRepoStars?: number;
   /** Whole days since the most recent push across all repos; null when unknown. */
   daysSinceLastPush?: number | null;
+  /** Repositories with specific documentation/metadata issues. */
+  repoAuditIssues?: RepoAuditIssue[];
+  /** Names of repositories missing descriptions. */
+  undescribedRepoNames?: string[];
+  /** Names of original repositories missing licenses. */
+  unlicensedRepoNames?: string[];
+  /** Names of original repositories missing topics. */
+  untaggedRepoNames?: string[];
+  /** Names of top/inspected repositories missing READMEs. */
+  missingReadmeRepoNames?: string[];
 }
 
 /**

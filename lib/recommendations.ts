@@ -36,6 +36,8 @@ export interface Recommendation {
   /** A practical illustration of the action. */
   example: string;
   tier: RecommendationTier;
+  /** Specific repositories that triggered this recommendation. */
+  affectedRepos?: Array<{ name: string; missing: string; fix?: string }>;
 }
 
 export interface ImprovementRoadmap {
@@ -75,7 +77,13 @@ function rec(
   tier: RecommendationTier,
   metricKey: ScoreDimensionKey,
   dimension: DimensionScore | undefined,
-  fields: { title: string; why: string; action: string; example: string },
+  fields: {
+    title: string;
+    why: string;
+    action: string;
+    example: string;
+    affectedRepos?: Array<{ name: string; missing: string; fix?: string }>;
+  },
 ): Recommendation {
   return {
     id,
@@ -152,7 +160,11 @@ export function buildRoadmap(
     );
   }
 
-  if (!has(profile.profileReadme ?? null)) {
+  // Only recommend creating a profile README if genuinely missing or unusable
+  const hasValidProfileReadme =
+    profile.hasProfileReadme === true || has(profile.profileReadme ?? null);
+
+  if (!hasValidProfileReadme) {
     quickWins.push(
       rec("profile-readme", "quickWin", "bonuses", bonuses, {
         title: "Create a profile README",
@@ -164,58 +176,109 @@ export function buildRoadmap(
     );
   }
 
-  const undescribed = n(stats.reposWithoutDescription);
+  const undescribedList = stats.undescribedRepoNames ?? [];
+  const undescribed =
+    undescribedList.length > 0 ? undescribedList.length : n(stats.reposWithoutDescription);
+
   if (totalRepos > 0 && undescribed > 0) {
+    const repoExamples =
+      undescribedList.length > 0
+        ? ` (e.g. ${undescribedList.slice(0, 3).map((r) => `"${r}"`).join(", ")})`
+        : "";
     quickWins.push(
       rec("add-descriptions", "quickWin", "quality", quality, {
         title: `Describe your ${undescribed} undescribed repositor${undescribed === 1 ? "y" : "ies"}`,
-        why: `${undescribed} of your ${totalRepos} repositories have no description, and description coverage is the heaviest Quality signal.`,
-        action:
-          "Add a one-sentence description to each repository explaining what it does and who it is for.",
+        why: `${undescribed} of your ${totalRepos} repositories have no description${repoExamples}, and description coverage is the heaviest Quality signal.`,
+        action: `Add a one-sentence description to ${undescribedList.length > 0 ? undescribedList.slice(0, 3).join(", ") : "each repository"} explaining what it does and who it is for.`,
         example:
           'A good description reads like "CLI that converts OpenAPI specs into typed TypeScript clients" — not "my project".',
+        affectedRepos: undescribedList.map((name) => ({
+          name,
+          missing: "description",
+          fix: "Add a clear repository description in repository settings.",
+        })),
       }),
     );
   }
 
-  if (originals > 0 && n(stats.reposWithTopics) < originals) {
-    const missing = originals - n(stats.reposWithTopics);
+  const untaggedList = stats.untaggedRepoNames ?? [];
+  const missingTopics =
+    untaggedList.length > 0
+      ? untaggedList.length
+      : Math.max(0, originals - n(stats.reposWithTopics));
+
+  if (originals > 0 && missingTopics > 0) {
+    const repoExamples =
+      untaggedList.length > 0
+        ? ` (e.g. ${untaggedList.slice(0, 3).map((r) => `"${r}"`).join(", ")})`
+        : "";
     quickWins.push(
       rec("add-topics", "quickWin", "quality", quality, {
         title: "Add topics to your repositories",
-        why: `${missing} of your ${originals} original repositories have no topics, so they are harder to discover and score lower on Quality.`,
-        action: "Tag each repository with 3–5 relevant topics.",
+        why: `${missingTopics} of your ${originals} original repositories have no topics${repoExamples}, so they are harder to discover and score lower on Quality.`,
+        action: `Tag ${untaggedList.length > 0 ? untaggedList.slice(0, 3).join(", ") : "each repository"} with 3–5 relevant topics.`,
         example:
           'A Rust CLI might use "rust", "cli", "developer-tools", "command-line".',
+        affectedRepos: untaggedList.map((name) => ({
+          name,
+          missing: "topics",
+          fix: "Add 3-5 relevant topics under repository 'About' settings.",
+        })),
       }),
     );
   }
 
-  if (originals > 0 && n(stats.reposWithLicense) < originals) {
-    const missing = originals - n(stats.reposWithLicense);
+  const unlicensedList = stats.unlicensedRepoNames ?? [];
+  const missingLicenses =
+    unlicensedList.length > 0
+      ? unlicensedList.length
+      : Math.max(0, originals - n(stats.reposWithLicense));
+
+  if (originals > 0 && missingLicenses > 0) {
+    const repoExamples =
+      unlicensedList.length > 0
+        ? ` (e.g. ${unlicensedList.slice(0, 3).map((r) => `"${r}"`).join(", ")})`
+        : "";
     quickWins.push(
       rec("add-license", "quickWin", "quality", quality, {
         title: "Add a licence to your public repositories",
-        why: `${missing} of your ${originals} original repositories have no detectable licence, which counts against Quality and discourages reuse.`,
-        action:
-          "Add a LICENSE file — GitHub can generate one for you from the Add file menu.",
+        why: `${missingLicenses} of your ${originals} original repositories have no detectable licence${repoExamples}, which counts against Quality and discourages reuse.`,
+        action: `Add a LICENSE file to ${unlicensedList.length > 0 ? unlicensedList.slice(0, 3).join(", ") : "your repositories"} — GitHub can generate one for you from the Add file menu.`,
         example:
           "MIT is the common default for small libraries and tools; Apache-2.0 adds an explicit patent grant.",
+        affectedRepos: unlicensedList.map((name) => ({
+          name,
+          missing: "license",
+          fix: "Add a LICENSE file (e.g. MIT, Apache-2.0, or GPL).",
+        })),
       }),
     );
   }
 
   /* ── Short term: documentation, demos, and getting back to active ────────── */
 
-  if (totalRepos > 0 && n(stats.reposWithReadme) === 0) {
+  const missingReadmeList = stats.missingReadmeRepoNames ?? [];
+  const shouldRecommendReadme =
+    missingReadmeList.length > 0 || (totalRepos > 0 && n(stats.reposWithReadme) === 0);
+
+  if (totalRepos > 0 && shouldRecommendReadme) {
+    const missingNote =
+      missingReadmeList.length > 0
+        ? ` (e.g. on ${missingReadmeList.slice(0, 3).join(", ")})`
+        : "";
     shortTerm.push(
       rec("write-readmes", "shortTerm", "quality", quality, {
         title: "Write a real README for your top repositories",
-        why: "We could not read a README on any of your most-starred repositories, and README presence is part of the Quality score.",
+        why: `We could not read a README on your public repositories${missingNote}, and README presence is part of the Quality score.`,
         action:
-          "For your top 3 repositories, write a README covering what it does, how to install it, and a usage example.",
+          "For your top repositories, write a README covering what it does, how to install it, and a usage example.",
         example:
           "Open with one sentence on the problem it solves, then a copy-pasteable install command and a short code sample.",
+        affectedRepos: missingReadmeList.map((name) => ({
+          name,
+          missing: "readme",
+          fix: "Create a README.md file in the root directory.",
+        })),
       }),
     );
   }

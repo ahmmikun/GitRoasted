@@ -302,4 +302,73 @@ describe("extended statistics for the scoring engine", () => {
     expect(consistencyWith.score).toBeGreaterThan(consistencyWithout.score);
     expect(consistencyWith.detail).toContain("1,500");
   });
+
+  it("accurately counts all 27 described repositories and produces zero undescribed repos", () => {
+    const repos27: GitHubRepo[] = Array.from({ length: 27 }, (_, i) => ({
+      name: `project-${i + 1}`,
+      description: `Valid description for project ${i + 1}`,
+      hasDescription: true,
+      language: "TypeScript",
+      stargazersCount: 5,
+      forksCount: 1,
+      fork: false,
+      homepage: `https://example.com/project-${i + 1}`,
+      hasHomepage: true,
+      pushedAt: "2024-12-01T00:00:00Z",
+      hasReadme: true,
+      hasLicense: true,
+      licenseName: "MIT",
+      topics: ["typescript", "cli"],
+      hasTopics: true,
+    }));
+
+    const result = analyzeProfile(baseProfile, repos27, NOW);
+    expect(result.stats.totalReposAnalyzed).toBe(27);
+    expect(result.stats.reposWithDescription).toBe(27);
+    expect(result.stats.reposWithoutDescription).toBe(0);
+    expect(result.stats.undescribedRepoNames).toHaveLength(0);
+    expect(result.stats.unlicensedRepoNames).toHaveLength(0);
+    expect(result.stats.untaggedRepoNames).toHaveLength(0);
+    expect(result.stats.repoAuditIssues).toHaveLength(0);
+  });
+
+  it("produces a detailed RepoAuditIssue with detected metadata, missing fields, evidence, and fix", () => {
+    const repos: GitHubRepo[] = [
+      {
+        name: "flawed-repo",
+        description: "Has description",
+        hasDescription: true,
+        language: "Rust",
+        stargazersCount: 10,
+        forksCount: 2,
+        fork: false,
+        homepage: null,
+        hasHomepage: false,
+        pushedAt: "2024-12-01T00:00:00Z",
+        hasReadme: false,
+        hasLicense: false,
+        topics: ["rust"],
+        hasTopics: true,
+      },
+    ];
+
+    const result = analyzeProfile(baseProfile, repos, NOW);
+    expect(result.stats.repoAuditIssues).toHaveLength(1);
+
+    const issue = result.stats.repoAuditIssues![0];
+    expect(issue.repoName).toBe("flawed-repo");
+    expect(issue.missing).toContain("license");
+    expect(issue.missing).toContain("readme");
+    expect(issue.missing).toContain("homepage");
+    expect(issue.missing).not.toContain("description");
+    expect(issue.missing).not.toContain("topics");
+
+    expect(issue.detected.hasDescription).toBe(true);
+    expect(issue.detected.hasTopics).toBe(true);
+    expect(issue.detected.hasLicense).toBe(false);
+    expect(issue.detected.hasReadme).toBe(false);
+
+    expect(issue.evidence).toContain("GitHub API metadata");
+    expect(issue.recommendedFix).toContain("flawed-repo");
+  });
 });

@@ -168,4 +168,148 @@ describe("fetchGitHubData", () => {
     expect(result.profile.bio).toBeNull();
     expect(result.profile.blog).toBeNull();
   });
+
+  it("detects an existing valid profile README case-insensitively and sets hasProfileReadme", async () => {
+    const mixedProfile = {
+      login: "Ahmmikun",
+      avatar_url: "https://example.com/avatar.png",
+      html_url: "https://github.com/Ahmmikun",
+    };
+    const userRepos = [
+      {
+        name: "ahmmikun", // lowercase repo matching login case-insensitively
+        description: "Special profile repository",
+        fork: false,
+        stargazers_count: 5,
+        forks_count: 0,
+      },
+    ];
+
+    const readmeContent = Buffer.from("# Hi, I'm Ahmmikun\nFull stack developer working on TypeScript and React!").toString("base64");
+
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(mixedProfile))
+      .mockResolvedValueOnce(jsonResponse(userRepos))
+      // Profile README probe on /repos/Ahmmikun/ahmmikun/readme
+      .mockResolvedValueOnce(jsonResponse({
+        name: "README.md",
+        encoding: "base64",
+        content: readmeContent,
+      }))
+      // Top repo README probe
+      .mockResolvedValueOnce(jsonResponse({
+        name: "README.md",
+        encoding: "base64",
+        content: readmeContent,
+      }));
+
+    const result = await fetchGitHubData("Ahmmikun");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.profile.hasProfileReadme).toBe(true);
+    expect(result.profile.profileReadme).toContain("Hi, I'm Ahmmikun");
+  });
+
+  it("marks profile README as missing when content is empty or whitespace-only", async () => {
+    const profile = { login: "emptyreadme", html_url: "https://github.com/emptyreadme" };
+    const emptyBase64 = Buffer.from("   <!-- placeholder -->   \n").toString("base64");
+
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(profile))
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse({
+        name: "README.md",
+        encoding: "base64",
+        content: emptyBase64,
+      }));
+
+    const result = await fetchGitHubData("emptyreadme");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.profile.hasProfileReadme).toBe(false);
+    expect(result.profile.profileReadme).toBeNull();
+  });
+
+  it("paginates repositories beyond page 1", async () => {
+    const profile = { login: "manyrepos", html_url: "https://github.com/manyrepos" };
+    // Generate 100 dummy repos for page 1
+    const page1Repos = Array.from({ length: 100 }, (_, i) => ({
+      name: `repo-${i + 1}`,
+      stargazers_count: 0,
+      forks_count: 0,
+      fork: false,
+    }));
+    // Generate 25 dummy repos for page 2 (< 100 terminates pagination)
+    const page2Repos = Array.from({ length: 25 }, (_, i) => ({
+      name: `repo-${101 + i}`,
+      stargazers_count: 0,
+      forks_count: 0,
+      fork: false,
+    }));
+
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(profile))
+      .mockResolvedValueOnce(jsonResponse(page1Repos)) // page 1
+      .mockResolvedValueOnce(jsonResponse(page2Repos)) // page 2
+      .mockResolvedValueOnce({ ok: false, status: 404 }); // profile readme
+
+    const result = await fetchGitHubData("manyrepos");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.repos).toHaveLength(125);
+    expect(result.repos[0].name).toBe("repo-1");
+    expect(result.repos[124].name).toBe("repo-125");
+  });
+
+  it("gracefully retains page 1 repositories if page 2 encounters a rate limit", async () => {
+    const profile = { login: "ratelimited", html_url: "https://github.com/ratelimited" };
+    const page1Repos = Array.from({ length: 100 }, (_, i) => ({
+      name: `repo-${i + 1}`,
+      stargazers_count: 0,
+      forks_count: 0,
+      fork: false,
+    }));
+
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(profile))
+      .mockResolvedValueOnce(jsonResponse(page1Repos)) // page 1 succeeds
+      .mockResolvedValueOnce({ ok: false, status: 403 }) // page 2 rate-limited
+      .mockResolvedValueOnce({ ok: false, status: 404 }); // profile readme
+
+    const result = await fetchGitHubData("ratelimited");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Repositories from page 1 are preserved
+    expect(result.repos).toHaveLength(100);
+  });
+
+  it("correctly identifies custom and NOASSERTION licenses", async () => {
+    const profile = { login: "customlicense", html_url: "https://github.com/customlicense" };
+    const repos = [
+      {
+        name: "custom-licensed-repo",
+        license: { spdx_id: "NOASSERTION", key: "other", name: "Custom Company License" },
+        fork: false,
+        stargazers_count: 0,
+        forks_count: 0,
+      },
+    ];
+
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(profile))
+      .mockResolvedValueOnce(jsonResponse(repos))
+      .mockResolvedValueOnce({ ok: false, status: 404 }) // profile readme
+      .mockResolvedValueOnce({ ok: false, status: 404 }); // repo readme
+
+    const result = await fetchGitHubData("customlicense");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.repos[0].hasLicense).toBe(true);
+    expect(result.repos[0].licenseName).toBe("Custom Company License");
+  });
 });

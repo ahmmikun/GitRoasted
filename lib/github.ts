@@ -47,31 +47,69 @@ interface RawGitHubRepo {
   fork?: boolean;
   homepage?: string | null;
   pushed_at?: string;
-  license?: { spdx_id?: string | null; key?: string | null } | null;
+  license?: { spdx_id?: string | null; key?: string | null; name?: string | null } | null;
   topics?: string[] | null;
   watchers_count?: number;
   open_issues_count?: number;
 }
 
+/** Result of probing a repository's README file. */
+interface ReadmeProbeResult {
+  excerpt: string | null;
+  hasReadme: boolean;
+  isUsable: boolean;
+  filename?: string;
+}
+
 /**
- * Fetch and clean the README for a given repo. Returns null when the repo has
- * no README (404) or on any error — missing READMEs are the common case and
- * must never surface as an error to callers.
+ * Fetch and clean the README for a given repo.
+ *
+ * Uses GitHub's native `GET /repos/{owner}/{repo}/readme` endpoint which
+ * dynamically resolves the default branch's README regardless of casing or
+ * extension (`README.md`, `README`, `readme.txt`, `README.markdown`, etc.).
+ * Falls back to `/contents/README.md` if the `/readme` endpoint fails.
  */
-async function fetchReadmeExcerpt(
+async function fetchReadmeDetails(
   owner: string,
   repo: string,
   headers: Record<string, string>,
   maxLength: number,
-): Promise<string | null> {
+): Promise<ReadmeProbeResult> {
+  const encOwner = encodeURIComponent(owner);
+  const encRepo = encodeURIComponent(repo);
+
+  // 1. Try GitHub's preferred /readme endpoint
   try {
-    const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/README.md`;
-    const res = await fetch(url, { headers });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { content?: string; encoding?: string };
-    if (!data.content || data.encoding !== "base64") return null;
+    const readmeUrl = `${GITHUB_API_BASE}/repos/${encOwner}/${encRepo}/readme`;
+    let res = await fetch(readmeUrl, { headers });
+
+    // Fallback: try contents/README.md if /readme returned 404
+    if (res.status === 404) {
+      const contentsUrl = `${GITHUB_API_BASE}/repos/${encOwner}/${encRepo}/contents/README.md`;
+      const fallbackRes = await fetch(contentsUrl, { headers });
+      if (fallbackRes.ok) {
+        res = fallbackRes;
+      }
+    }
+
+    if (!res.ok) {
+      return { excerpt: null, hasReadme: false, isUsable: false };
+    }
+
+    const data = (await res.json()) as {
+      content?: string;
+      encoding?: string;
+      name?: string;
+      path?: string;
+    };
+
+    if (!data.content || data.encoding !== "base64") {
+      return { excerpt: null, hasReadme: true, isUsable: false, filename: data.name ?? "README" };
+    }
+
     const raw = Buffer.from(data.content.replace(/\s/g, ""), "base64").toString("utf-8");
     const cleaned = raw
+      .replace(/<!--[\s\S]*?-->/g, "")           // strip HTML comments
       .replace(/!\[.*?\]\(.*?\)/g, "")           // strip images
       .replace(/```[\s\S]*?```/g, "")             // strip code blocks
       .replace(/^#{1,6}\s+/gm, "")               // strip heading markers
@@ -79,22 +117,43 @@ async function fetchReadmeExcerpt(
       .replace(/[*_~`]/g, "")                     // strip emphasis chars
       .replace(/\s+/g, " ")                       // collapse whitespace
       .trim();
-    if (!cleaned) return null;
-    return cleaned.length > maxLength ? cleaned.slice(0, maxLength) + "…" : cleaned;
+
+    // A README is considered usable if it has meaningful content (> 10 characters after stripping)
+    const isUsable = cleaned.length >= 10;
+    const excerpt = cleaned.length > maxLength ? cleaned.slice(0, maxLength) + "…" : cleaned;
+
+    return {
+      excerpt: isUsable ? excerpt : null,
+      hasReadme: true,
+      isUsable,
+      filename: data.name ?? data.path ?? "README.md",
+    };
   } catch {
-    return null;
+    return { excerpt: null, hasReadme: false, isUsable: false };
   }
 }
 
-/** Build request headers, attaching the bearer token when configured. */
+/** Legacy wrapper returning just the excerpt for compatibility. */
+async function fetchReadmeExcerpt(
+  owner: string,
+  repo: string,
+  headers: Record<string, string>,
+  maxLength: number,
+): Promise<string | null> {
+  const result = await fetchReadmeDetails(owner, repo, headers, maxLength);
+  return result.excerpt;
+}
+
+/** Build request headers, attaching User-Agent and bearer token when configured. */
 function buildHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "GitRoasted-Profile-Analyzer",
   };
   const token = process.env.GITHUB_TOKEN;
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  if (token && token.trim().length > 0) {
+    headers.Authorization = `Bearer ${token.trim()}`;
   }
   return headers;
 }
@@ -114,44 +173,80 @@ function mapProfile(raw: RawGitHubUser): GitHubProfile {
     company: raw.company ?? null,
     location: raw.location ?? null,
     createdAt: raw.created_at ?? "",
+    hasProfileReadme: false,
+    profileReadme: null,
   };
 }
 
 /**
  * Map a raw GitHub repository payload onto the normalized GitHubRepo shape.
  *
- * `license`, `topics`, `watchers` and `openIssues` all arrive in the same
- * `/users/{user}/repos` response we already fetch, so capturing them costs no
- * additional API requests. GitHub reports "NOASSERTION" for licenses it cannot
- * identify, which we treat as unlicensed.
+ * Accurately detects licenses (including custom, non-SPDX, or "other" licenses),
+ * descriptions, topics, and homepages.
  */
 function mapRepo(raw: RawGitHubRepo): GitHubRepo {
-  const spdx = raw.license?.spdx_id ?? raw.license?.key ?? null;
-  const license =
-    spdx && spdx.trim().length > 0 && spdx.toUpperCase() !== "NOASSERTION" ? spdx : null;
+  const rawLicense = raw.license;
+  const spdx = rawLicense?.spdx_id?.trim() || null;
+  const key = rawLicense?.key?.trim() || null;
+  const name = rawLicense?.name?.trim() || null;
+
+  // A license is present if rawLicense exists with any non-empty name, key, or SPDX ID.
+  const hasLicense = Boolean(
+    rawLicense &&
+      ((spdx && spdx.toUpperCase() !== "NONE") ||
+        (key && key.toLowerCase() !== "none") ||
+        (name && name.toLowerCase() !== "none")),
+  );
+
+  const licenseSpdxOrKey =
+    spdx && spdx.toUpperCase() !== "NOASSERTION" ? spdx : key || name || null;
+
+  const desc = typeof raw.description === "string" ? raw.description.trim() : null;
+  const hasDescription = desc !== null && desc.length > 0;
+
+  const hp = typeof raw.homepage === "string" ? raw.homepage.trim() : null;
+  const hasHomepage = hp !== null && hp.length > 0;
+
+  const topics = Array.isArray(raw.topics)
+    ? raw.topics.filter((t) => typeof t === "string" && t.trim().length > 0)
+    : [];
+  const hasTopics = topics.length > 0;
 
   return {
     name: raw.name ?? "",
-    description: raw.description ?? null,
+    description: hasDescription ? desc : null,
+    hasDescription,
     language: raw.language ?? null,
     stargazersCount: raw.stargazers_count ?? 0,
     forksCount: raw.forks_count ?? 0,
     fork: raw.fork ?? false,
-    homepage: raw.homepage ? raw.homepage : null,
+    homepage: hasHomepage ? hp : null,
+    hasHomepage,
     pushedAt: raw.pushed_at ?? "",
-    license,
-    topics: Array.isArray(raw.topics) ? raw.topics.filter((t) => typeof t === "string") : [],
+    license: licenseSpdxOrKey,
+    licenseName: name || licenseSpdxOrKey,
+    hasLicense,
+    topics,
+    hasTopics,
     watchers: raw.watchers_count ?? 0,
     openIssues: raw.open_issues_count ?? 0,
   };
 }
 
+/** Maximum number of repository pages to scan (10 pages * 100 = 1,000 repos). */
+const MAX_REPO_PAGES = 10;
+
 /**
  * Fetch the public profile and public repositories for a GitHub username.
  *
+ * Fully supports:
+ *  - Repository pagination beyond page 1
+ *  - Case-insensitive profile README detection (`username/username`)
+ *  - Verification of README usability before claiming presence
+ *  - Graceful rate-limit and upstream error handling
+ *
  * @param username The GitHub login to look up.
- * @returns A normalized, typed result describing success, not-found, or an
- *          upstream error.
+ * @returns A normalized, typed result describing success, not-found, or an upstream error.
  */
 export async function fetchGitHubData(
   username: string,
@@ -200,62 +295,109 @@ export async function fetchGitHubData(
     };
   }
 
-  // 2. Fetch the repositories.
-  let reposResponse: Response;
-  try {
-    reposResponse = await fetch(
-      `${GITHUB_API_BASE}/users/${encoded}/repos?per_page=100&sort=updated`,
-      { headers },
-    );
-  } catch {
-    return {
-      ok: false,
-      kind: "upstream_error",
-      message: "Failed to reach the GitHub API.",
-    };
-  }
+  // Canonical login from profile response
+  const canonicalLogin = rawProfile.login || username;
 
-  if (!reposResponse.ok) {
-    return {
-      ok: false,
-      kind: "upstream_error",
-      message: `GitHub repositories request failed with status ${reposResponse.status}.`,
-    };
-  }
+  // 2. Fetch all repositories across pages.
+  const rawRepos: RawGitHubRepo[] = [];
+  let page = 1;
 
-  let rawRepos: RawGitHubRepo[];
-  try {
-    const parsed = await reposResponse.json();
-    rawRepos = Array.isArray(parsed) ? (parsed as RawGitHubRepo[]) : [];
-  } catch {
-    return {
-      ok: false,
-      kind: "upstream_error",
-      message: "Failed to read the GitHub API response.",
-    };
+  while (page <= MAX_REPO_PAGES) {
+    let reposResponse: Response;
+    try {
+      reposResponse = await fetch(
+        `${GITHUB_API_BASE}/users/${encodeURIComponent(canonicalLogin)}/repos?per_page=100&page=${page}&sort=updated`,
+        { headers },
+      );
+    } catch {
+      if (page === 1) {
+        return {
+          ok: false,
+          kind: "upstream_error",
+          message: "Failed to reach the GitHub API.",
+        };
+      }
+      // On subsequent pages, retain the repos already fetched
+      break;
+    }
+
+    if (!reposResponse.ok) {
+      if (page === 1) {
+        return {
+          ok: false,
+          kind: "upstream_error",
+          message: `GitHub repositories request failed with status ${reposResponse.status}.`,
+        };
+      }
+      break;
+    }
+
+    let pageRepos: RawGitHubRepo[];
+    try {
+      const parsed = await reposResponse.json();
+      pageRepos = Array.isArray(parsed) ? (parsed as RawGitHubRepo[]) : [];
+    } catch {
+      if (page === 1) {
+        return {
+          ok: false,
+          kind: "upstream_error",
+          message: "Failed to read the GitHub API response.",
+        };
+      }
+      break;
+    }
+
+    rawRepos.push(...pageRepos);
+
+    // If fewer than 100 repos returned, this was the last page
+    if (pageRepos.length < 100) {
+      break;
+    }
+
+    page += 1;
   }
 
   const mappedProfile = mapProfile(rawProfile);
   const mappedRepos = rawRepos.map(mapRepo);
 
-  // Top 3 non-forked repos by stars — fetch their READMEs in parallel with the
-  // profile README. All failures are silently swallowed via Promise.allSettled.
-  const topRepos = [...mappedRepos]
-    .filter((r) => !r.fork)
-    .sort((a, b) => b.stargazersCount - a.stargazersCount)
-    .slice(0, 3);
+  // 3. Detect and verify Profile README:
+  // Look for a repository named {canonicalLogin} case-insensitively.
+  const profileRepoMatch = mappedRepos.find(
+    (r) => r.name.toLowerCase() === canonicalLogin.toLowerCase(),
+  );
+  const profileRepoName = profileRepoMatch?.name || canonicalLogin;
 
-  const readmeResults = await Promise.allSettled([
-    fetchReadmeExcerpt(username, username, headers, 600), // profile README
-    ...topRepos.map((r) => fetchReadmeExcerpt(username, r.name, headers, 300)),
+  // 4. Select top repositories for README inspection:
+  // Top non-forked repos sorted by stars (up to 15 repos for deep documentation audit).
+  const nonForkedRepos = mappedRepos.filter((r) => !r.fork);
+  const topRepos = [...nonForkedRepos]
+    .sort((a, b) => b.stargazersCount - a.stargazersCount)
+    .slice(0, 15);
+
+  const [profileReadmeResult, ...topReadmeResults] = await Promise.allSettled([
+    fetchReadmeDetails(canonicalLogin, profileRepoName, headers, 600),
+    ...topRepos.map((r) => fetchReadmeDetails(canonicalLogin, r.name, headers, 300)),
   ]);
 
-  mappedProfile.profileReadme =
-    readmeResults[0]?.status === "fulfilled" ? readmeResults[0].value : null;
+  if (profileReadmeResult.status === "fulfilled") {
+    const pResult = profileReadmeResult.value;
+    if (pResult.hasReadme && pResult.isUsable && pResult.excerpt) {
+      mappedProfile.profileReadme = pResult.excerpt;
+      mappedProfile.hasProfileReadme = true;
+    } else {
+      mappedProfile.hasProfileReadme = false;
+      mappedProfile.profileReadme = null;
+    }
+  }
 
   topRepos.forEach((repo, i) => {
-    const r = readmeResults[i + 1];
-    if (r?.status === "fulfilled") repo.readmeExcerpt = r.value;
+    const r = topReadmeResults[i];
+    if (r?.status === "fulfilled") {
+      repo.hasReadme = r.value.hasReadme;
+      if (r.value.excerpt) {
+        repo.readmeExcerpt = r.value.excerpt;
+      }
+    }
   });
 
   return { ok: true, profile: mappedProfile, repos: mappedRepos };

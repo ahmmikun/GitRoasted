@@ -103,16 +103,101 @@ function computeStats(repos: GitHubRepo[], now: number): GitHubStats {
   let reposWithReadme = 0;
   let maxRepoStars = 0;
 
+  const undescribedRepoNames: string[] = [];
+  const unlicensedRepoNames: string[] = [];
+  const untaggedRepoNames: string[] = [];
+  const missingReadmeRepoNames: string[] = [];
+  const repoAuditIssues: import("./types").RepoAuditIssue[] = [];
+
   for (const repo of repos) {
     totalStars += repo.stargazersCount;
     totalForks += repo.forksCount;
-    if (isNonEmpty(repo.description)) reposWithDescription += 1;
-    if (isNonEmpty(repo.homepage)) reposWithHomepage += 1;
-    if (repo.fork) forkedRepos += 1;
-    if (isNonEmpty(repo.license ?? null)) reposWithLicense += 1;
-    if (Array.isArray(repo.topics) && repo.topics.length > 0) reposWithTopics += 1;
-    if (isNonEmpty(repo.readmeExcerpt ?? null)) reposWithReadme += 1;
+
+    const hasDesc =
+      repo.hasDescription ?? (isNonEmpty(repo.description));
+    if (hasDesc) {
+      reposWithDescription += 1;
+    } else {
+      undescribedRepoNames.push(repo.name);
+    }
+
+    const hasHome =
+      repo.hasHomepage ?? (isNonEmpty(repo.homepage));
+    if (hasHome) reposWithHomepage += 1;
+
+    if (repo.fork) {
+      forkedRepos += 1;
+    }
+
+    const hasLic =
+      repo.hasLicense ??
+      (isNonEmpty(repo.license ?? null) || isNonEmpty(repo.licenseName ?? null));
+    if (hasLic) {
+      reposWithLicense += 1;
+    } else if (!repo.fork) {
+      unlicensedRepoNames.push(repo.name);
+    }
+
+    const hasTop =
+      repo.hasTopics ??
+      (Array.isArray(repo.topics) && repo.topics.length > 0);
+    if (hasTop) {
+      reposWithTopics += 1;
+    } else if (!repo.fork) {
+      untaggedRepoNames.push(repo.name);
+    }
+
+    const hasRead =
+      repo.hasReadme ?? (isNonEmpty(repo.readmeExcerpt ?? null));
+    if (hasRead) {
+      reposWithReadme += 1;
+    } else if (!repo.fork && repo.hasReadme === false) {
+      missingReadmeRepoNames.push(repo.name);
+    }
+
     if (repo.stargazersCount > maxRepoStars) maxRepoStars = repo.stargazersCount;
+
+    // Collect audit issue if documentation or metadata is missing
+    const missing: Array<"readme" | "license" | "topics" | "description" | "homepage"> = [];
+    if (!hasDesc) missing.push("description");
+    if (!repo.fork && !hasLic) missing.push("license");
+    if (!repo.fork && !hasTop) missing.push("topics");
+    if (!repo.fork && !hasHome) missing.push("homepage");
+    if (!repo.fork && repo.hasReadme === false) missing.push("readme");
+
+    if (missing.length > 0) {
+      const detectedDetails: string[] = [];
+      if (hasDesc && repo.description) {
+        detectedDetails.push(`description: "${repo.description.slice(0, 35)}..."`);
+      }
+      if (hasLic) detectedDetails.push(`license: "${repo.licenseName || repo.license || "detected"}"`);
+      if (hasTop && repo.topics) detectedDetails.push(`topics: [${repo.topics.join(", ")}]`);
+      if (hasHome && repo.homepage) detectedDetails.push(`homepage: "${repo.homepage}"`);
+      if (hasRead) detectedDetails.push("README present");
+
+      const detectedSummary =
+        detectedDetails.length > 0 ? detectedDetails.join(", ") : "None";
+
+      repoAuditIssues.push({
+        repoName: repo.name,
+        isFork: repo.fork,
+        missing,
+        detected: {
+          hasDescription: Boolean(hasDesc),
+          description: repo.description,
+          hasReadme: repo.hasReadme ?? (hasRead ? true : null),
+          readmeExcerpt: repo.readmeExcerpt,
+          hasLicense: Boolean(hasLic),
+          licenseName: repo.licenseName || repo.license,
+          hasTopics: Boolean(hasTop),
+          topics: repo.topics,
+          hasHomepage: Boolean(hasHome),
+          homepage: repo.homepage,
+        },
+        evidence: `GitHub API metadata (${detectedSummary})`,
+        recommendedFix: `Add missing ${missing.join(", ")} to repository "${repo.name}".`,
+      });
+    }
   }
 
   return {
@@ -134,6 +219,11 @@ function computeStats(repos: GitHubRepo[], now: number): GitHubStats {
     reposWithReadme,
     maxRepoStars,
     daysSinceLastPush: computeDaysSinceLastPush(repos, now),
+    repoAuditIssues,
+    undescribedRepoNames,
+    unlicensedRepoNames,
+    untaggedRepoNames,
+    missingReadmeRepoNames,
   };
 }
 

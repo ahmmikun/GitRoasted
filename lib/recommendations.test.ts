@@ -298,4 +298,82 @@ describe("buildRoadmap — partial data", () => {
     const ids = roadmap.shortTerm.map((r) => r.id);
     expect(ids).not.toContain("resume-pushing");
   });
+
+  it("never recommends creating a profile README if hasProfileReadme is true", () => {
+    const profileWithReadme: GitHubProfile = {
+      ...weakProfile,
+      hasProfileReadme: true,
+      profileReadme: "Valid developer intro",
+    };
+    const roadmap = roadmapFor(profileWithReadme, weakStats);
+    const ids = roadmap.quickWins.map((r) => r.id);
+    expect(ids).not.toContain("profile-readme");
+  });
+
+  it("does not recommend adding descriptions, topics, licenses, or READMEs when all repos have them", () => {
+    const fullyDocumentedStats: GitHubStats = {
+      totalReposAnalyzed: 5,
+      totalStars: 50,
+      totalForks: 10,
+      topLanguages: ["TypeScript"],
+      reposWithDescription: 5,
+      reposWithoutDescription: 0,
+      reposWithHomepage: 5,
+      recentlyUpdatedRepos: 3,
+      forkedRepos: 0,
+      originalRepos: 5,
+      distinctLanguages: 3,
+      reposWithLicense: 5,
+      reposWithTopics: 5,
+      reposWithReadme: 5,
+      undescribedRepoNames: [],
+      unlicensedRepoNames: [],
+      untaggedRepoNames: [],
+      missingReadmeRepoNames: [],
+      maxRepoStars: 20,
+      daysSinceLastPush: 5,
+    };
+
+    const roadmap = roadmapFor(weakProfile, fullyDocumentedStats);
+    const ids = [...roadmap.quickWins, ...roadmap.shortTerm].map((r) => r.id);
+
+    expect(ids).not.toContain("add-descriptions");
+    expect(ids).not.toContain("add-topics");
+    expect(ids).not.toContain("add-license");
+    expect(ids).not.toContain("write-readmes");
+  });
+
+  it("names the exact affected repository when only one repo is missing a license", () => {
+    const statsWithOneMissingLicense: GitHubStats = {
+      totalReposAnalyzed: 5,
+      totalStars: 50,
+      totalForks: 10,
+      topLanguages: ["TypeScript"],
+      reposWithDescription: 5,
+      reposWithoutDescription: 0,
+      reposWithHomepage: 3,
+      recentlyUpdatedRepos: 3,
+      forkedRepos: 0,
+      originalRepos: 5,
+      distinctLanguages: 3,
+      reposWithLicense: 4,
+      reposWithTopics: 5,
+      reposWithReadme: 5,
+      undescribedRepoNames: [],
+      unlicensedRepoNames: ["unlicensed-tool"],
+      untaggedRepoNames: [],
+      missingReadmeRepoNames: [],
+      maxRepoStars: 20,
+      daysSinceLastPush: 5,
+    };
+
+    const roadmap = roadmapFor(weakProfile, statsWithOneMissingLicense);
+    const licenseRec = roadmap.quickWins.find((r) => r.id === "add-license");
+
+    expect(licenseRec).toBeDefined();
+    expect(licenseRec?.why).toContain("unlicensed-tool");
+    expect(licenseRec?.affectedRepos).toHaveLength(1);
+    expect(licenseRec?.affectedRepos?.[0].name).toBe("unlicensed-tool");
+    expect(licenseRec?.affectedRepos?.[0].missing).toBe("license");
+  });
 });

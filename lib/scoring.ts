@@ -298,7 +298,10 @@ function scoreQuality(stats: GitHubStats): DimensionScore {
     homepageRatio * 20 +
     readmeSignal * 20;
 
-  const detail = `${fmt(stats.reposWithDescription)}/${fmt(total)} repo(s) described, ${fmt(stats.reposWithLicense)} licensed, ${fmt(stats.reposWithTopics)} with topics, ${fmt(stats.reposWithHomepage)} with a demo link.`;
+  let detail = `${fmt(stats.reposWithDescription)}/${fmt(total)} repo(s) described, ${fmt(stats.reposWithLicense)} licensed, ${fmt(stats.reposWithTopics)} with topics, ${fmt(stats.reposWithHomepage)} with a demo link.`;
+  if (stats.undescribedRepoNames && stats.undescribedRepoNames.length > 0 && stats.undescribedRepoNames.length <= 3) {
+    detail += ` Undescribed: ${stats.undescribedRepoNames.join(", ")}.`;
+  }
 
   return dimension("quality", points, detail);
 }
@@ -416,7 +419,7 @@ function scoreBonuses(profile: GitHubProfile, stats: GitHubStats): DimensionScor
   const earned: string[] = [];
   let points = 0;
 
-  if (isNonEmpty(profile.profileReadme ?? null)) {
+  if (profile.hasProfileReadme === true || isNonEmpty(profile.profileReadme ?? null)) {
     points += 8;
     earned.push("profile README");
   }
