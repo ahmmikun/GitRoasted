@@ -377,3 +377,63 @@ describe("buildRoadmap — partial data", () => {
     expect(licenseRec?.affectedRepos?.[0].missing).toBe("license");
   });
 });
+
+describe("buildRoadmap — bonus quick win safeguards", () => {
+  it("never recommends add-website or profile-readme if profile already has them", () => {
+    const profileWithSiteAndReadme: GitHubProfile = {
+      ...weakProfile,
+      blog: "https://myportfolio.com",
+      hasProfileReadme: true,
+      profileReadme: "# Hi there",
+    };
+
+    const roadmap = roadmapFor(profileWithSiteAndReadme, weakStats);
+    const ids = roadmap.quickWins.map((r) => r.id);
+
+    expect(ids).not.toContain("add-website");
+    expect(ids).not.toContain("profile-readme");
+  });
+
+  it("never emits bonus quick wins when Bonuses dimension is maxed out at 25", () => {
+    const maxedBonusesBreakdown = [
+      {
+        key: "bonuses" as const,
+        label: "Bonuses",
+        score: 25,
+        max: 25,
+        detail: "Earned for: profile README, bio, website, company/location, a repo with 50+ stars.",
+      },
+    ];
+
+    const roadmap = buildRoadmap(weakProfile, weakStats, maxedBonusesBreakdown);
+    const bonusRecs = roadmap.quickWins.filter((r) => r.metricKey === "bonuses");
+
+    expect(bonusRecs).toHaveLength(0);
+  });
+
+  it("never recommends website or profile README if bonuses detail indicates they were earned", () => {
+    const legacySnapshotBreakdown = [
+      {
+        key: "bonuses" as const,
+        label: "Bonuses",
+        score: 20,
+        max: 25,
+        detail: "Earned for: profile README, website.",
+      },
+    ];
+
+    // Profile with null blog and false hasProfileReadme (e.g. from an old stripped snapshot)
+    const strippedProfile: GitHubProfile = {
+      ...weakProfile,
+      blog: null,
+      hasProfileReadme: false,
+      profileReadme: null,
+    };
+
+    const roadmap = buildRoadmap(strippedProfile, weakStats, legacySnapshotBreakdown);
+    const ids = roadmap.quickWins.map((r) => r.id);
+
+    expect(ids).not.toContain("add-website");
+    expect(ids).not.toContain("profile-readme");
+  });
+});

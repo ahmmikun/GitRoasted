@@ -253,6 +253,54 @@ describe("getProfileAnalysis — error mapping", () => {
 });
 
 describe("saveProfileSnapshot", () => {
+  it("persists full profile fields including blog, company, location, and profileReadme", async () => {
+    vi.mocked(ProfileAnalysisModel.findOneAndUpdate).mockResolvedValue({} as never);
+
+    const ok = await saveProfileSnapshot({
+      username: "testuser",
+      profile: {
+        ...profile,
+        hasProfileReadme: true,
+        profileReadme: "# Custom Readme",
+      },
+      stats: {
+        totalReposAnalyzed: 1,
+        totalStars: 300,
+        totalForks: 40,
+        topLanguages: ["TypeScript"],
+        reposWithDescription: 1,
+        reposWithoutDescription: 0,
+        reposWithHomepage: 1,
+        recentlyUpdatedRepos: 1,
+        forkedRepos: 0,
+        originalRepos: 1,
+      },
+      score: 500,
+      grade: "D",
+      tier: { min: 400, label: "Developing", grade: "D" },
+      breakdown: [],
+      summary: "",
+      repos: [],
+      fromSnapshot: false,
+      analyzedAt: new Date(NOW),
+    });
+
+    expect(ok).toBe(true);
+    expect(ProfileAnalysisModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { username: "testuser" },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          blog: "https://example.com",
+          company: "Acme",
+          location: "Earth",
+          hasProfileReadme: true,
+          profileReadme: "# Custom Readme",
+        }),
+      }),
+      { upsert: true, new: true },
+    );
+  });
+
   it("returns false instead of throwing when the write fails", async () => {
     vi.mocked(ProfileAnalysisModel.findOneAndUpdate).mockRejectedValue(new Error("nope"));
 
@@ -282,5 +330,44 @@ describe("saveProfileSnapshot", () => {
     });
 
     expect(ok).toBe(false);
+  });
+});
+
+describe("getProfileAnalysis — legacy snapshot backward compatibility", () => {
+  it("infers hasProfileReadme and blog from bonuses detail when missing from legacy snapshot", async () => {
+    stubSnapshot({
+      username: "testuser",
+      login: "TestUser",
+      name: "Test User",
+      avatarUrl: "https://example.com/a.png",
+      profileUrl: "https://github.com/TestUser",
+      bio: "Builder",
+      score: 800,
+      grade: "B",
+      tier: "Strong",
+      breakdown: [
+        {
+          key: "bonuses",
+          label: "Bonuses",
+          score: 25,
+          max: 25,
+          detail: "Earned for: profile README, bio, website, company/location, a repo with 50+ stars.",
+        },
+      ],
+      followers: 120,
+      following: 30,
+      publicRepos: 12,
+      accountCreatedAt: "2018-01-01T00:00:00Z",
+      stats: { totalStars: 300, topLanguages: ["TypeScript"] },
+      analyzedAt: new Date(NOW - 60 * 60 * 1000),
+      // Legacy document: blog and hasProfileReadme omitted
+    });
+
+    const result = await getProfileAnalysis("TestUser", { now: NOW });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.analysis.profile.hasProfileReadme).toBe(true);
+    expect(result.analysis.profile.blog).not.toBeNull();
   });
 });

@@ -29,10 +29,15 @@ export async function GET(request: NextRequest) {
   }
 
   const username = validation.username;
+  const force =
+    searchParams.get("force") === "true" ||
+    searchParams.get("refresh") === "true" ||
+    searchParams.get("force") === "1" ||
+    searchParams.get("refresh") === "1";
 
   // Reuses a recent snapshot when one exists, so navigating between the
   // leaderboard and this page does not re-hit GitHub.
-  const result = await getProfileAnalysis(username);
+  const result = await getProfileAnalysis(username, { force });
 
   if (!result.ok) {
     if (result.kind === "not_found") {

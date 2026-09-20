@@ -24,6 +24,11 @@ export interface IProfileAnalysis {
   avatarUrl: string;
   profileUrl: string;
   bio: string | null;
+  blog: string | null;
+  company: string | null;
+  location: string | null;
+  hasProfileReadme?: boolean;
+  profileReadme?: string | null;
 
   /** Developer_Score total in [0, 1000]. */
   score: number;
@@ -72,6 +77,11 @@ const ProfileAnalysisSchema = new Schema<IProfileAnalysisDocument>(
     avatarUrl: { type: String, default: "" },
     profileUrl: { type: String, default: "" },
     bio: { type: String, default: null },
+    blog: { type: String, default: null },
+    company: { type: String, default: null },
+    location: { type: String, default: null },
+    hasProfileReadme: { type: Boolean, default: false },
+    profileReadme: { type: String, default: null },
 
     score: { type: Number, required: true, min: 0, max: 1000, index: true },
     grade: { type: String, required: true },

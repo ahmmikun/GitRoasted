@@ -134,7 +134,14 @@ export function buildRoadmap(
 
   /* ── Quick wins: profile metadata and repo hygiene ───────────────────────── */
 
-  if (!has(profile.bio)) {
+  const bonusDetail = bonuses?.detail || "";
+  const isEarnedDetail = bonusDetail.startsWith("Earned for:");
+  const hasWebsiteBonus = isEarnedDetail && bonusDetail.includes("website");
+  const hasProfileReadmeBonus = isEarnedDetail && bonusDetail.includes("profile README");
+  const hasBioBonus = isEarnedDetail && bonusDetail.includes("bio");
+  const bonusesMaxed = bonuses ? bonuses.score >= bonuses.max : false;
+
+  if (!bonusesMaxed && !hasBioBonus && !has(profile.bio)) {
     quickWins.push(
       rec("add-bio", "quickWin", "bonuses", bonuses, {
         title: "Add a bio to your GitHub profile",
@@ -147,7 +154,7 @@ export function buildRoadmap(
     );
   }
 
-  if (!has(profile.blog)) {
+  if (!bonusesMaxed && !hasWebsiteBonus && !has(profile.blog)) {
     quickWins.push(
       rec("add-website", "quickWin", "bonuses", bonuses, {
         title: "Link a website or portfolio",
@@ -162,9 +169,9 @@ export function buildRoadmap(
 
   // Only recommend creating a profile README if genuinely missing or unusable
   const hasValidProfileReadme =
-    profile.hasProfileReadme === true || has(profile.profileReadme ?? null);
+    profile.hasProfileReadme === true || has(profile.profileReadme ?? null) || hasProfileReadmeBonus;
 
-  if (!hasValidProfileReadme) {
+  if (!bonusesMaxed && !hasProfileReadmeBonus && !hasValidProfileReadme) {
     quickWins.push(
       rec("profile-readme", "quickWin", "bonuses", bonuses, {
         title: "Create a profile README",

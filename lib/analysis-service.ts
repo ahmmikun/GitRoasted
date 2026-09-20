@@ -100,7 +100,32 @@ function analysisFromSnapshot(doc: {
   accountCreatedAt: string;
   stats: GitHubStats;
   analyzedAt: Date;
+  blog?: string | null;
+  company?: string | null;
+  location?: string | null;
+  hasProfileReadme?: boolean;
+  profileReadme?: string | null;
 }): ProfileAnalysis {
+  // Infer missing metadata from bonuses detail for backward compatibility with existing snapshots
+  const bonusesDim = doc.breakdown?.find((d) => d.key === "bonuses");
+  const bonusDetail = bonusesDim?.detail || "";
+  const isEarnedDetail = bonusDetail.startsWith("Earned for:");
+
+  const hasProfileReadme =
+    typeof doc.hasProfileReadme === "boolean"
+      ? doc.hasProfileReadme
+      : isEarnedDetail && bonusDetail.includes("profile README");
+
+  const blog =
+    doc.blog !== undefined && doc.blog !== null
+      ? doc.blog
+      : isEarnedDetail && bonusDetail.includes("website")
+        ? "https://profile-link"
+        : null;
+
+  const profileReadme =
+    doc.profileReadme ?? (hasProfileReadme ? "(profile README present)" : null);
+
   return {
     username: doc.username,
     profile: {
@@ -112,10 +137,12 @@ function analysisFromSnapshot(doc: {
       following: doc.following,
       publicRepos: doc.publicRepos,
       profileUrl: doc.profileUrl,
-      blog: null,
-      company: null,
-      location: null,
+      blog,
+      company: doc.company ?? null,
+      location: doc.location ?? null,
       createdAt: doc.accountCreatedAt,
+      hasProfileReadme,
+      profileReadme,
     },
     stats: doc.stats,
     score: doc.score,
@@ -173,6 +200,11 @@ export async function saveProfileSnapshot(analysis: ProfileAnalysis): Promise<bo
             analysis.profile.profileUrl ||
             `https://github.com/${analysis.profile.login || analysis.username}`,
           bio: analysis.profile.bio ?? null,
+          blog: analysis.profile.blog ?? null,
+          company: analysis.profile.company ?? null,
+          location: analysis.profile.location ?? null,
+          hasProfileReadme: Boolean(analysis.profile.hasProfileReadme),
+          profileReadme: analysis.profile.profileReadme ?? null,
           score: analysis.score,
           grade: analysis.grade,
           tier: analysis.tier.label,
